@@ -35,8 +35,8 @@ export default async function Home({
   ]);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
-      <aside className="w-[380px] flex-shrink-0 border-r border-[var(--line)] bg-[var(--panel)] flex flex-col">
+    <div className="w-screen h-screen overflow-hidden">
+      <aside className="fixed top-0 left-0 bottom-0 w-[380px] border-r border-[var(--line)] bg-[var(--panel)] flex flex-col z-10">
         <header className="px-5 py-4 border-b border-[var(--line)] flex items-center justify-between">
           <div>
             <Link href="/" className="text-lg font-semibold tracking-tight">civic-philly</Link>
@@ -56,7 +56,7 @@ export default async function Home({
           />
         </Suspense>
       </aside>
-      <main className="flex-1 relative">
+      <main className="fixed top-0 right-0 bottom-0 left-[380px]">
         <MapView points={points} filters={filters} />
       </main>
     </div>

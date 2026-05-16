@@ -179,15 +179,15 @@ export default function MapView({ points, filters }: Props) {
   }, [filters.near?.lat, filters.near?.lng]);
 
   return (
-    <div className="relative w-full" style={{ height: "100vh" }}>
-      <div ref={containerRef} className="absolute inset-0" />
+    <>
+      <div ref={containerRef} className="w-full h-full" />
       {error && (
         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[var(--panel)] border border-red-500/50 rounded-lg px-4 py-3 text-sm text-red-300 max-w-md shadow-lg z-10">
           {error}
         </div>
       )}
       <Legend />
-    </div>
+    </>
   );
 }
 
