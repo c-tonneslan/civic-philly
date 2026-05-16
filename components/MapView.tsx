@@ -78,7 +78,10 @@ export default function MapView({ points, filters }: Props) {
         layout: {
           "text-field": "{point_count_abbreviated}",
           "text-size": 12,
-          "text-font": ["Noto Sans Bold", "Open Sans Bold", "Arial Unicode MS Bold"],
+          // OpenFreeMap's positron style only ships Noto Sans
+          // Regular/Bold/Italic. Anything else 404s and breaks
+          // expression evaluation on this layer.
+          "text-font": ["Noto Sans Bold"],
         },
         paint: { "text-color": "#0b0c0e" },
       });
