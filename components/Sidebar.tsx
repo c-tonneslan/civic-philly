@@ -228,6 +228,7 @@ export default function Sidebar({ projects, neighborhoods, fundingSources, activ
         <Link href="/districts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Districts</Link>
         <Link href="/developers" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Devs</Link>
         <Link href="/owners" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Owners</Link>
+        <Link href="/transfers" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Buyers</Link>
         <Link href="/stalled" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Stalled</Link>
         <Link href="/alerts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Alerts</Link>
         <Link href="/methodology" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Methods</Link>

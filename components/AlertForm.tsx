@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { ProjectType } from "@/lib/types";
 import { PROJECT_TYPES, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
+import AddressAutocomplete from "./AddressAutocomplete";
 
 const GEOCODER_URL =
   process.env.NEXT_PUBLIC_GEOCODER_URL || "https://nominatim.openstreetmap.org/search";
@@ -78,8 +79,9 @@ export default function AlertForm() {
         />
       </Field>
       <Field label="Philadelphia address">
-        <input
-          type="text" required value={address} onChange={(e) => setAddress(e.target.value)}
+        <AddressAutocomplete
+          value={address}
+          onChange={setAddress}
           placeholder="4601 Market St"
           className="w-full bg-[var(--panel-2)] border border-[var(--line)] rounded px-3 py-2 text-sm"
         />

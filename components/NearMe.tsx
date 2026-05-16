@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import AddressAutocomplete from "./AddressAutocomplete";
 
 interface Props {
   active: { lat: number; lng: number; radiusMeters: number } | undefined;
@@ -56,13 +57,15 @@ export default function NearMe({ active, onApply, onClear }: Props) {
         What's near me
       </div>
       <form onSubmit={handleApply} className="flex gap-1.5">
-        <input
-          type="text"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="e.g. 4601 Market St"
-          className="flex-1 min-w-0 bg-[var(--panel-2)] border border-[var(--line)] rounded px-2 py-1.5 text-xs"
-        />
+        <div className="flex-1 min-w-0">
+          <AddressAutocomplete
+            value={address}
+            onChange={setAddress}
+            onSelect={(s) => onApply({ lat: s.lat, lng: s.lng, radiusMeters: radius })}
+            placeholder="e.g. 4601 Market St"
+            className="w-full bg-[var(--panel-2)] border border-[var(--line)] rounded px-2 py-1.5 text-xs"
+          />
+        </div>
         <select
           value={radius}
           onChange={(e) => setRadius(Number(e.target.value))}

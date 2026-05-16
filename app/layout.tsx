@@ -6,9 +6,16 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const jbMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://civic-philly.vercel.app"),
   title: "civic-philly — what's actually being built in Philadelphia",
   description:
     "A map of every active housing development, transit project, zoning change, and capital investment in Philadelphia. Filter by neighborhood, status, or what's near your address.",
+  openGraph: {
+    type: "website",
+    siteName: "civic-philly",
+    url: "https://civic-philly.vercel.app",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

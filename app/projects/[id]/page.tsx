@@ -8,6 +8,7 @@ import {
   getTract, getDisplacementWithin, getStatusHistory, getRCO,
 } from "@/lib/context";
 import { getOwnerByParcel } from "@/lib/owners";
+import { getTransfersAtAddress, getTransfersWithin } from "@/lib/transfers";
 import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
 import MiniMap from "@/components/MiniMap";
 import StatusTimeline from "@/components/StatusTimeline";
@@ -35,7 +36,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const project = await getProject(Number(id));
   if (!project) notFound();
-  const [ds, siblings, district, official, tract, demolitions, history, rco, owner] = await Promise.all([
+  const [
+    ds, siblings, district, official, tract, demolitions, history, rco, owner,
+    addressTransfers, areaTransfers,
+  ] = await Promise.all([
     getDatasource(project.datasource_id),
     getSiblingProjects(project.lat, project.lng, 400, project.id, 8),
     project.council_district_id ? getDistrict(project.council_district_id) : Promise.resolve(null),
@@ -45,6 +49,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     getStatusHistory(project.id),
     project.rco_id ? getRCO(project.rco_id) : Promise.resolve(null),
     project.opa_account ? getOwnerByParcel(project.opa_account) : Promise.resolve(null),
+    project.address ? getTransfersAtAddress(project.address, 10) : Promise.resolve([]),
+    getTransfersWithin(project.lat, project.lng, 200, 12),
   ]);
 
   return (
@@ -203,6 +209,68 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                 <div key={d.id} className="flex justify-between gap-3">
                   <span className="text-[var(--ink)] truncate">{d.address || "—"}</span>
                   <span className="text-[var(--ink-dim)] whitespace-nowrap">{d.event_date}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Ownership history at this address. The "this LLC just bought
+            it for $X" signal. */}
+        {addressTransfers.length > 0 && (
+          <section className="mt-10">
+            <h2 className="text-lg font-medium mb-2">Ownership history at this address</h2>
+            <p className="text-xs text-[var(--ink-dim)] mb-4">
+              From the city realty-transfer-tax feed. Mortgages and satisfactions filtered out.
+            </p>
+            <div className="border border-[var(--line)] rounded-lg overflow-hidden bg-[var(--panel)] divide-y divide-[var(--line)]">
+              {addressTransfers.map((t) => (
+                <div key={t.id} className="px-4 py-3 text-xs">
+                  <div className="flex justify-between gap-3 flex-wrap">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wider text-[var(--ink-dim)] mb-0.5">
+                        {t.document_type} · {t.transfer_date}
+                      </div>
+                      <div className="text-[var(--ink)]">
+                        {t.grantor || "—"} <span className="text-[var(--ink-dim)]">→</span> {t.grantee || "—"}
+                      </div>
+                    </div>
+                    {t.consideration != null && (
+                      <div className="text-[var(--ink)] font-medium whitespace-nowrap">
+                        ${t.consideration.toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Block-level acquisition pattern. Within 200m. */}
+        {areaTransfers.length > 0 && (
+          <section className="mt-10">
+            <h2 className="text-lg font-medium mb-2">Recent transfers within 200m</h2>
+            <p className="text-xs text-[var(--ink-dim)] mb-4">
+              Block-level acquisition pattern. {areaTransfers.length} transaction{areaTransfers.length === 1 ? "" : "s"} in the immediate area.
+            </p>
+            <div className="border border-[var(--line)] rounded-lg overflow-hidden bg-[var(--panel)] divide-y divide-[var(--line)] text-xs max-h-80 overflow-y-auto">
+              {areaTransfers.map((t) => (
+                <div key={t.id} className="px-4 py-2.5">
+                  <div className="flex justify-between gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[var(--ink)] truncate">{t.address || "—"}</div>
+                      <div className="text-[var(--ink-dim)] truncate">
+                        {t.grantor || "—"} → {t.grantee || "—"}
+                      </div>
+                    </div>
+                    <div className="text-right whitespace-nowrap">
+                      <div className="text-[var(--ink)]">{t.transfer_date}</div>
+                      {t.consideration != null && (
+                        <div className="text-[var(--ink-dim)]">${t.consideration.toLocaleString()}</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

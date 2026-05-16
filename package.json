@@ -21,6 +21,7 @@
     "load:displacement": "node scripts/load-displacement.mjs",
     "load:violations": "node scripts/load-violations.mjs",
     "load:owners": "node scripts/load-owners.mjs",
+    "load:transfers": "node scripts/load-transfers.mjs",
     "backfill:developers": "node scripts/backfill-developers.mjs",
     "backfill:spatial": "node scripts/backfill-spatial.mjs",
     "alerts:send": "node scripts/send-alerts.mjs",
