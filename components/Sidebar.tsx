@@ -24,6 +24,7 @@ function buildQuery(filters: ProjectFilters): string {
   filters.statuses?.forEach((s) => sp.append("status", s));
   if (filters.neighborhood) sp.set("neighborhood", filters.neighborhood);
   if (filters.fundingSource) sp.set("funding", filters.fundingSource);
+  if (filters.districtId) sp.set("district", String(filters.districtId));
   if (filters.startYear) sp.set("startYear", String(filters.startYear));
   if (filters.endYear) sp.set("endYear", String(filters.endYear));
   if (filters.near) {
@@ -112,6 +113,17 @@ export default function Sidebar({ projects, neighborhoods, fundingSources, activ
 
         <div className="grid grid-cols-2 gap-3">
           <div>
+            <FieldLabel>Council district</FieldLabel>
+            <select
+              value={filters.districtId ?? ""}
+              onChange={(e) => update({ districtId: e.target.value ? Number(e.target.value) : undefined })}
+              className="w-full bg-[var(--panel-2)] border border-[var(--line)] rounded px-2 py-1.5 text-xs"
+            >
+              <option value="">Any</option>
+              {[1,2,3,4,5,6,7,8,9,10].map((n) => <option key={n} value={n}>District {n}</option>)}
+            </select>
+          </div>
+          <div>
             <FieldLabel>Neighborhood</FieldLabel>
             <select
               value={filters.neighborhood ?? ""}
@@ -122,17 +134,18 @@ export default function Sidebar({ projects, neighborhoods, fundingSources, activ
               {neighborhoods.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
-          <div>
-            <FieldLabel>Funding</FieldLabel>
-            <select
-              value={filters.fundingSource ?? ""}
-              onChange={(e) => update({ fundingSource: e.target.value || undefined })}
-              className="w-full bg-[var(--panel-2)] border border-[var(--line)] rounded px-2 py-1.5 text-xs"
-            >
-              <option value="">Any</option>
-              {fundingSources.slice(0, 50).map((f) => <option key={f} value={f}>{f}</option>)}
-            </select>
-          </div>
+        </div>
+
+        <div>
+          <FieldLabel>Funding source</FieldLabel>
+          <select
+            value={filters.fundingSource ?? ""}
+            onChange={(e) => update({ fundingSource: e.target.value || undefined })}
+            className="w-full bg-[var(--panel-2)] border border-[var(--line)] rounded px-2 py-1.5 text-xs"
+          >
+            <option value="">Any</option>
+            {fundingSources.slice(0, 50).map((f) => <option key={f} value={f}>{f}</option>)}
+          </select>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
@@ -162,12 +175,20 @@ export default function Sidebar({ projects, neighborhoods, fundingSources, activ
           <span className="text-[11px] text-[var(--ink-dim)]">
             {pending ? "updating…" : `${projects.length} projects`}
           </span>
-          <button
-            onClick={() => { setFilters({}); startTransition(() => router.push("/")); }}
-            className="text-[11px] text-[var(--ink-dim)] hover:text-[var(--ink)] underline-offset-2 hover:underline"
-          >
-            reset
-          </button>
+          <div className="flex items-center gap-3">
+            <a
+              href={`/api/export.csv${buildQuery(filters)}`}
+              className="text-[11px] text-[var(--ink-dim)] hover:text-[var(--ink)] underline-offset-2 hover:underline"
+            >
+              export CSV
+            </a>
+            <button
+              onClick={() => { setFilters({}); startTransition(() => router.push("/")); }}
+              className="text-[11px] text-[var(--ink-dim)] hover:text-[var(--ink)] underline-offset-2 hover:underline"
+            >
+              reset
+            </button>
+          </div>
         </div>
       </div>
 
@@ -199,12 +220,18 @@ export default function Sidebar({ projects, neighborhoods, fundingSources, activ
         ))}
       </div>
 
-      <footer className="px-5 py-3 border-t border-[var(--line)] flex items-center justify-between text-[11px] text-[var(--ink-dim)]">
+      <footer className="px-5 py-3 border-t border-[var(--line)] flex items-center justify-between gap-3 text-[11px] text-[var(--ink-dim)] flex-wrap">
+        <Link href="/districts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">
+          Districts
+        </Link>
+        <Link href="/stalled" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">
+          Stalled
+        </Link>
         <Link href="/alerts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">
-          Get email alerts
+          Alerts
         </Link>
         <Link href="/data" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">
-          Data sources
+          Data
         </Link>
       </footer>
     </div>

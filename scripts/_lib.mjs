@@ -88,7 +88,7 @@ ON CONFLICT (datasource_id, external_id) DO UPDATE SET
   raw_attrs = EXCLUDED.raw_attrs,
   geom = EXCLUDED.geom,
   imported_at = NOW()
-RETURNING (xmax = 0) AS inserted;
+RETURNING id, (xmax = 0) AS inserted, status;
 `;
 
 export async function upsertProjects(datasourceId, projects) {
@@ -121,7 +121,25 @@ export async function upsertProjects(datasourceId, projects) {
         p.lng,
         p.lat,
       ]);
-      if (r.rows[0]?.inserted) inserted++; else updated++;
+      const row = r.rows[0];
+      if (row?.inserted) inserted++; else updated++;
+      // Capture a status snapshot if the status changed (or it's the first
+      // sighting). This is what powers the "stalled projects" view and
+      // promises-vs-delivery accountability tracker.
+      if (row) {
+        const prev = await client.query(
+          `SELECT status FROM civic.status_history
+             WHERE project_id = $1
+             ORDER BY observed_at DESC LIMIT 1`,
+          [row.id],
+        );
+        if (!prev.rows[0] || prev.rows[0].status !== row.status) {
+          await client.query(
+            "INSERT INTO civic.status_history (project_id, status) VALUES ($1, $2)",
+            [row.id, row.status],
+          );
+        }
+      }
     }
     await client.query(
       "UPDATE civic.datasources SET last_fetched_at = NOW(), record_count = $2, status = 'ok' WHERE id = $1",

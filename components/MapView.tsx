@@ -14,12 +14,24 @@ interface Props {
 const PHL_CENTER: [number, number] = [-75.1652, 39.9526];
 const STYLE_URL = process.env.NEXT_PUBLIC_MAP_STYLE_URL || "https://tiles.openfreemap.org/styles/positron";
 
+const OVERLAY_OPTIONS = [
+  { id: "none",          label: "None" },
+  { id: "rent_burdened", label: "Rent burdened (%)", scale: "pct" },
+  { id: "renter",        label: "Renter occupied (%)", scale: "pct" },
+  { id: "income",        label: "Median income ($)", scale: "income" },
+  { id: "black",         label: "Black population (%)", scale: "pct" },
+  { id: "white",         label: "White population (%)", scale: "pct" },
+  { id: "hispanic",      label: "Hispanic population (%)", scale: "pct" },
+] as const;
+type OverlayId = (typeof OVERLAY_OPTIONS)[number]["id"];
+
 export default function MapView({ points, filters }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [overlay, setOverlay] = useState<OverlayId>("none");
+  const [showDemolitions, setShowDemolitions] = useState(false);
 
-  // Initialize the map once.
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
     let map: MapLibreMap;
@@ -40,8 +52,6 @@ export default function MapView({ points, filters }: Props) {
       console.error("maplibre runtime error", e);
       setError(`Map error: ${e.error?.message || "unknown"}`);
     });
-    // Force a resize after layout settles. Some layouts measure the container
-    // as zero at first paint, which makes maplibre fall back to a 300px canvas.
     const forceResize = () => map.resize();
     window.addEventListener("resize", forceResize);
     requestAnimationFrame(forceResize);
@@ -50,6 +60,37 @@ export default function MapView({ points, filters }: Props) {
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
 
     map.on("load", () => {
+      // Choropleth source (empty until user picks a metric).
+      map.addSource("tracts", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "tracts-fill", type: "fill", source: "tracts",
+        paint: {
+          "fill-color": ["interpolate", ["linear"], ["coalesce", ["get", "value"], 0],
+            0, "#0b0c0e", 100, "#ea580c"],
+          "fill-opacity": 0.45,
+        },
+      }, /* beforeId */ undefined);
+      map.addLayer({
+        id: "tracts-line", type: "line", source: "tracts",
+        paint: { "line-color": "rgba(255,255,255,0.08)", "line-width": 0.5 },
+      });
+
+      // Demolitions source.
+      map.addSource("demolitions", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "demolitions-circles", type: "circle", source: "demolitions",
+        paint: {
+          "circle-color": "#dc2626",
+          "circle-radius": 4,
+          "circle-opacity": 0.7,
+          "circle-stroke-width": 1,
+          "circle-stroke-color": "#0b0c0e",
+        },
+      });
+      // Hide by default.
+      map.setLayoutProperty("demolitions-circles", "visibility", "none");
+
+      // Projects (clustered).
       map.addSource("projects", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
@@ -57,11 +98,8 @@ export default function MapView({ points, filters }: Props) {
         clusterMaxZoom: 13,
         clusterRadius: 50,
       });
-
       map.addLayer({
-        id: "clusters",
-        type: "circle",
-        source: "projects",
+        id: "clusters", type: "circle", source: "projects",
         filter: ["has", "point_count"],
         paint: {
           "circle-color": ["step", ["get", "point_count"], "#4b5563", 10, "#6b7280", 50, "#9ca3af"],
@@ -71,24 +109,17 @@ export default function MapView({ points, filters }: Props) {
         },
       });
       map.addLayer({
-        id: "cluster-count",
-        type: "symbol",
-        source: "projects",
+        id: "cluster-count", type: "symbol", source: "projects",
         filter: ["has", "point_count"],
         layout: {
           "text-field": "{point_count_abbreviated}",
           "text-size": 12,
-          // OpenFreeMap's positron style only ships Noto Sans
-          // Regular/Bold/Italic. Anything else 404s and breaks
-          // expression evaluation on this layer.
           "text-font": ["Noto Sans Bold"],
         },
         paint: { "text-color": "#0b0c0e" },
       });
       map.addLayer({
-        id: "unclustered",
-        type: "circle",
-        source: "projects",
+        id: "unclustered", type: "circle", source: "projects",
         filter: ["!", ["has", "point_count"]],
         paint: {
           "circle-color": [
@@ -113,7 +144,6 @@ export default function MapView({ points, filters }: Props) {
           getClusterExpansionZoom: (id: number) => Promise<number>;
         };
         const zoom = await src.getClusterExpansionZoom(clusterId);
-        // geometry is a Point on the cluster feature itself.
         const geom = features[0].geometry as unknown as { coordinates: [number, number] };
         map.easeTo({ center: geom.coordinates, zoom });
       });
@@ -132,12 +162,37 @@ export default function MapView({ points, filters }: Props) {
             <a href="/projects/${props.id}" class="text-xs underline underline-offset-2 hover:opacity-80">Open details &rarr;</a>
           </div>`;
         new maplibregl.Popup({ closeButton: true, offset: 14 })
+          .setLngLat(coords).setHTML(html).addTo(map);
+      });
+
+      // Tract popup: show ACS values for clicked tract.
+      map.on("click", "tracts-fill", (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const value = f.properties?.value;
+        const geoid = f.properties?.geoid;
+        new maplibregl.Popup({ closeButton: true })
+          .setLngLat(e.lngLat)
+          .setHTML(`
+            <div class="text-xs">
+              <div class="opacity-60 uppercase tracking-wider text-[10px]">Census tract ${String(geoid).slice(-6)}</div>
+              <div class="text-sm font-medium mt-1">${value ?? "—"}${typeof value === "number" && value <= 100 ? "%" : ""}</div>
+            </div>
+          `).addTo(map);
+      });
+
+      // Demolition popup: address + date.
+      map.on("click", "demolitions-circles", (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const coords = (f.geometry as unknown as { coordinates: [number, number] }).coordinates;
+        new maplibregl.Popup({ closeButton: true, offset: 8 })
           .setLngLat(coords)
-          .setHTML(html)
+          .setHTML(`<div class="text-xs"><div class="uppercase tracking-wider opacity-60 text-[10px]">Demolition permit</div><div class="mt-1">${f.properties?.event_date || ""}</div></div>`)
           .addTo(map);
       });
 
-      ["clusters", "unclustered"].forEach((id) => {
+      ["clusters", "unclustered", "tracts-fill", "demolitions-circles"].forEach((id) => {
         map.on("mouseenter", id, () => { map.getCanvas().style.cursor = "pointer"; });
         map.on("mouseleave", id, () => { map.getCanvas().style.cursor = ""; });
       });
@@ -151,7 +206,7 @@ export default function MapView({ points, filters }: Props) {
     };
   }, []);
 
-  // Push new points whenever the props change.
+  // Push points whenever they change.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -171,6 +226,55 @@ export default function MapView({ points, filters }: Props) {
     else map.once("load", apply);
   }, [points]);
 
+  // Choropleth: fetch + apply on overlay change.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const apply = async () => {
+      const src = map.getSource("tracts") as GeoJSONSource | undefined;
+      if (!src) return;
+      if (overlay === "none") {
+        src.setData({ type: "FeatureCollection", features: [] });
+        return;
+      }
+      const resp = await fetch(`/api/overlays/tracts?metric=${overlay}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      // Compute a domain from the data so colors stretch to actual range.
+      const values: number[] = data.features.map((f: { properties: { value: number | null } }) => f.properties.value).filter((v: number | null): v is number => v != null);
+      if (values.length === 0) return;
+      const sorted = [...values].sort((a, b) => a - b);
+      const lo = sorted[Math.floor(sorted.length * 0.05)];
+      const hi = sorted[Math.floor(sorted.length * 0.95)];
+      src.setData(data);
+      map.setPaintProperty("tracts-fill", "fill-color", [
+        "interpolate", ["linear"], ["coalesce", ["get", "value"], lo],
+        lo, "#1a3a52", (lo + hi) / 2, "#d97706", hi, "#ea580c",
+      ]);
+    };
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [overlay]);
+
+  // Demolitions layer toggle.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = async () => {
+      map.setLayoutProperty("demolitions-circles", "visibility", showDemolitions ? "visible" : "none");
+      if (showDemolitions) {
+        const src = map.getSource("demolitions") as GeoJSONSource | undefined;
+        if (!src) return;
+        const resp = await fetch("/api/overlays/demolitions");
+        if (!resp.ok) return;
+        src.setData(await resp.json());
+      }
+    };
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [showDemolitions]);
+
   // If we have a `near` filter, fly there.
   useEffect(() => {
     const map = mapRef.current;
@@ -186,8 +290,35 @@ export default function MapView({ points, filters }: Props) {
           {error}
         </div>
       )}
+      <Overlays overlay={overlay} setOverlay={setOverlay} showDemolitions={showDemolitions} setShowDemolitions={setShowDemolitions} />
       <Legend />
     </>
+  );
+}
+
+function Overlays({
+  overlay, setOverlay, showDemolitions, setShowDemolitions,
+}: {
+  overlay: OverlayId;
+  setOverlay: (v: OverlayId) => void;
+  showDemolitions: boolean;
+  setShowDemolitions: (v: boolean) => void;
+}) {
+  return (
+    <div className="absolute top-4 left-4 bg-[var(--panel)]/95 backdrop-blur border border-[var(--line)] rounded-lg px-3 py-2.5 text-xs shadow-lg space-y-2 min-w-[230px]">
+      <div className="text-[10px] uppercase tracking-wider text-[var(--ink-dim)]">Equity overlay</div>
+      <select
+        value={overlay}
+        onChange={(e) => setOverlay(e.target.value as OverlayId)}
+        className="w-full bg-[var(--panel-2)] border border-[var(--line)] rounded px-2 py-1.5 text-xs"
+      >
+        {OVERLAY_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+      </select>
+      <label className="flex items-center gap-2 text-xs pt-1">
+        <input type="checkbox" checked={showDemolitions} onChange={(e) => setShowDemolitions(e.target.checked)} />
+        <span>Demolition permits (3y)</span>
+      </label>
+    </div>
   );
 }
 

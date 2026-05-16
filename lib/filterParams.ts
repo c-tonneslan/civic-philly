@@ -12,6 +12,7 @@ export function parseFiltersFromSearchParams(sp: URLSearchParams): ProjectFilter
   const statuses = intersect<ProjectStatus>(sp.getAll("status"), PROJECT_STATUSES);
   const neighborhood = sp.get("neighborhood") || undefined;
   const fundingSource = sp.get("funding") || undefined;
+  const districtId = sp.get("district") ? Number(sp.get("district")) : undefined;
   const startYear = sp.get("startYear") ? Number(sp.get("startYear")) : undefined;
   const endYear = sp.get("endYear") ? Number(sp.get("endYear")) : undefined;
   const lat = sp.get("lat") ? Number(sp.get("lat")) : undefined;
@@ -23,6 +24,7 @@ export function parseFiltersFromSearchParams(sp: URLSearchParams): ProjectFilter
 
   return {
     types, statuses, neighborhood, fundingSource,
+    districtId: Number.isFinite(districtId) ? districtId : undefined,
     startYear: Number.isFinite(startYear) ? startYear : undefined,
     endYear: Number.isFinite(endYear) ? endYear : undefined,
     near,

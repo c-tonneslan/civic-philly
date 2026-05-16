@@ -18,6 +18,7 @@ if (!process.env.DATABASE_URL) {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const schema = readFileSync(join(here, "..", "db", "schema.sql"), "utf8");
+const schemaV2 = readFileSync(join(here, "..", "db", "schema_v2.sql"), "utf8");
 const seed = readFileSync(join(here, "..", "db", "seed_datasources.sql"), "utf8");
 
 const { Pool } = pg;
@@ -30,6 +31,8 @@ const client = await pool.connect();
 try {
   console.log("applying schema...");
   await client.query(schema);
+  console.log("applying schema v2 (context, history, follows)...");
+  await client.query(schemaV2);
   console.log("seeding datasources...");
   await client.query(seed);
   console.log("done.");

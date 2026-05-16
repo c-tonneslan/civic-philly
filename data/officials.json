@@ -1,0 +1,32 @@
+{
+  "mayor": {
+    "name": "Cherelle L. Parker",
+    "party": "D",
+    "email": "mayor@phila.gov",
+    "phone": "215-686-2181",
+    "office_address": "City Hall Room 215, 1400 John F. Kennedy Blvd, Philadelphia, PA 19107",
+    "website": "https://www.phila.gov/departments/office-of-the-mayor/",
+    "twitter": "@PhillyMayor"
+  },
+  "districts": [
+    { "district_id": 1, "name": "Mark Squilla", "party": "D", "email": "mark.squilla@phila.gov", "phone": "215-686-3458", "office_address": "City Hall Room 332", "website": "https://phlcouncil.com/MarkSquilla/" },
+    { "district_id": 2, "name": "Kenyatta Johnson", "party": "D", "email": "kenyatta.johnson@phila.gov", "phone": "215-686-0461", "office_address": "City Hall Room 408", "website": "https://phlcouncil.com/KenyattaJohnson/" },
+    { "district_id": 3, "name": "Jamie Gauthier", "party": "D", "email": "jamie.gauthier@phila.gov", "phone": "215-686-0454", "office_address": "City Hall Room 580", "website": "https://phlcouncil.com/JamieGauthier/" },
+    { "district_id": 4, "name": "Curtis Jones, Jr.", "party": "D", "email": "curtis.jones@phila.gov", "phone": "215-686-3416", "office_address": "City Hall Room 404", "website": "https://phlcouncil.com/CurtisJones/" },
+    { "district_id": 5, "name": "Jeffery Young, Jr.", "party": "D", "email": "jeffery.young@phila.gov", "phone": "215-686-3438", "office_address": "City Hall Room 577", "website": "https://phlcouncil.com/JefferyYoung/" },
+    { "district_id": 6, "name": "Michael Driscoll", "party": "D", "email": "mike.driscoll@phila.gov", "phone": "215-686-3422", "office_address": "City Hall Room 312", "website": "https://phlcouncil.com/MikeDriscoll/" },
+    { "district_id": 7, "name": "Quetcy Lozada", "party": "D", "email": "quetcy.lozada@phila.gov", "phone": "215-686-3448", "office_address": "City Hall Room 588", "website": "https://phlcouncil.com/QuetcyLozada/" },
+    { "district_id": 8, "name": "Cindy Bass", "party": "D", "email": "cindy.bass@phila.gov", "phone": "215-686-3424", "office_address": "City Hall Room 410", "website": "https://phlcouncil.com/CindyBass/" },
+    { "district_id": 9, "name": "Anthony Phillips", "party": "D", "email": "anthony.phillips@phila.gov", "phone": "215-686-3454", "office_address": "City Hall Room 596", "website": "https://phlcouncil.com/AnthonyPhillips/" },
+    { "district_id": 10, "name": "Brian J. O'Neill", "party": "R", "email": "brian.oneill@phila.gov", "phone": "215-686-3422", "office_address": "City Hall Room 562", "website": "https://phlcouncil.com/BrianONeill/" }
+  ],
+  "at_large": [
+    { "name": "Kendra Brooks", "party": "WFP", "email": "kendra.brooks@phila.gov", "phone": "215-686-0454", "office_address": "City Hall Room 594", "website": "https://phlcouncil.com/KendraBrooks/" },
+    { "name": "Nicolas O'Rourke", "party": "WFP", "email": "nicolas.orourke@phila.gov", "phone": "215-686-3450", "office_address": "City Hall Room 583", "website": "https://phlcouncil.com/NicolasORourke/" },
+    { "name": "Rue Landau", "party": "D", "email": "rue.landau@phila.gov", "phone": "215-686-3448", "office_address": "City Hall Room 313", "website": "https://phlcouncil.com/RueLandau/" },
+    { "name": "Isaiah Thomas", "party": "D", "email": "isaiah.thomas@phila.gov", "phone": "215-686-3442", "office_address": "City Hall Room 586", "website": "https://phlcouncil.com/IsaiahThomas/" },
+    { "name": "Jim Harrity", "party": "D", "email": "jim.harrity@phila.gov", "phone": "215-686-3416", "office_address": "City Hall Room 581", "website": "https://phlcouncil.com/JimHarrity/" },
+    { "name": "Katherine Gilmore Richardson", "party": "D", "email": "katherine.richardson@phila.gov", "phone": "215-686-0454", "office_address": "City Hall Room 599", "website": "https://phlcouncil.com/KatherineGilmoreRichardson/" },
+    { "name": "Nina Ahmad", "party": "D", "email": "nina.ahmad@phila.gov", "phone": "215-686-3444", "office_address": "City Hall Room 311", "website": "https://phlcouncil.com/NinaAhmad/" }
+  ]
+}
