@@ -1,57 +1,40 @@
-// City of Philadelphia Capital Program Projects loader.
+// Major city capital infrastructure projects. Philadelphia doesn't publish
+// the six-year capital program as a machine-readable feed (the dataset
+// listed on OpenDataPhilly 404s), so this loads from data/phl-infrastructure.json,
+// which is hand-curated from the published CIP and press releases.
+// The data quality panel says so plainly.
 //
 //   node scripts/scrape-infrastructure.mjs
 
-import {
-  pool, fetchArcgisAll, pointFromFeature, upsertProjects, asNumber, asDate,
-} from "./_lib.mjs";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { pool, upsertProjects } from "./_lib.mjs";
 
-const ENDPOINT =
-  "https://services.arcgis.com/fLeGjb7u4uXqeF9q/ArcGIS/rest/services/Capital_Program_Projects/FeatureServer/0/query";
 const DATASOURCE = "phl-infrastructure";
-
-function normalizeStatus(s) {
-  const v = (s || "").toLowerCase();
-  if (v.includes("complete")) return "completed";
-  if (v.includes("construction") || v.includes("in progress")) return "under_construction";
-  if (v.includes("design") || v.includes("planning") || v.includes("proposed")) return "proposed";
-  if (v.includes("approved") || v.includes("award")) return "approved";
-  if (v.includes("cancel") || v.includes("hold")) return "cancelled";
-  return "unknown";
-}
-
-function toProject(feat) {
-  const a = feat.attributes || {};
-  const pt = pointFromFeature(feat);
-  if (!pt) return null;
-
-  const id = a.project_id || a.cpp_id || a.objectid;
-  return {
-    external_id: String(id),
-    project_type: "infrastructure",
-    name: a.project_name || a.title || `Capital project ${id}`,
-    description: a.description || a.project_description || null,
-    address: a.location || a.address || null,
-    neighborhood: a.neighborhood || null,
-    council_district: a.council_district ? String(a.council_district) : null,
-    status: normalizeStatus(a.status || a.phase),
-    funding_source: a.funding_source || a.fund_source || "City Capital Program",
-    funding_amount: asNumber(a.total_budget || a.project_cost || a.estimated_cost),
-    start_date: asDate(a.start_date),
-    completion_date: asDate(a.completion_date || a.end_date),
-    source_url: "https://opendataphilly.org/datasets/capital-program-projects/",
-    raw_attrs: a,
-    lat: pt.lat,
-    lng: pt.lng,
-  };
-}
+const here = dirname(fileURLToPath(import.meta.url));
 
 async function main() {
-  console.log(`fetching ${DATASOURCE}...`);
-  const features = await fetchArcgisAll(ENDPOINT);
-  console.log(`got ${features.length} features`);
-  const projects = features.map(toProject).filter(Boolean);
-  console.log(`upserting ${projects.length} projects...`);
+  const raw = readFileSync(join(here, "..", "data", "phl-infrastructure.json"), "utf8");
+  const items = JSON.parse(raw);
+  const projects = items.map((p) => ({
+    external_id: p.external_id,
+    project_type: "infrastructure",
+    name: p.name,
+    description: p.description,
+    address: p.address,
+    neighborhood: p.neighborhood,
+    status: p.status,
+    funding_source: p.funding_source,
+    funding_amount: p.funding_amount,
+    start_date: p.start_date,
+    completion_date: p.completion_date,
+    source_url: p.source_url,
+    raw_attrs: p,
+    lat: p.lat,
+    lng: p.lng,
+  }));
+  console.log(`upserting ${projects.length} infrastructure projects...`);
   const { inserted, updated } = await upsertProjects(DATASOURCE, projects);
   console.log(`done. ${inserted} new, ${updated} updated.`);
   await pool.end();

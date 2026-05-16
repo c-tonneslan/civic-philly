@@ -10,6 +10,7 @@
     "db:migrate": "node scripts/migrate.mjs",
     "scrape:housing": "node scripts/scrape-housing.mjs",
     "scrape:zoning": "node scripts/scrape-zoning.mjs",
+    "scrape:infrastructure": "node scripts/scrape-infrastructure.mjs",
     "scrape:septa": "node scripts/scrape-septa.mjs",
     "scrape:pha": "node scripts/scrape-pha.mjs",
     "scrape:all": "node scripts/scrape-all.mjs",

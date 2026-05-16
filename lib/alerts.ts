@@ -31,7 +31,7 @@ export async function createSubscription(input: {
   const verify = token();
   const unsub = token();
   const r = await query<AlertSubscription>(
-    `INSERT INTO alert_subscriptions
+    `INSERT INTO civic.alert_subscriptions
       (email, address_label, radius_meters, project_types,
        verified, verify_token, unsubscribe_token, geom)
      VALUES ($1, $2, $3, $4, FALSE, $5, $6,
@@ -53,7 +53,7 @@ export async function createSubscription(input: {
 
 export async function verifySubscription(verifyToken: string): Promise<AlertSubscription | null> {
   const r = await query<AlertSubscription>(
-    `UPDATE alert_subscriptions
+    `UPDATE civic.alert_subscriptions
        SET verified = TRUE
      WHERE verify_token = $1
      RETURNING id, email, address_label, radius_meters, project_types,
@@ -67,7 +67,7 @@ export async function verifySubscription(verifyToken: string): Promise<AlertSubs
 
 export async function unsubscribe(unsubToken: string): Promise<boolean> {
   const r = await query(
-    "DELETE FROM alert_subscriptions WHERE unsubscribe_token = $1",
+    "DELETE FROM civic.alert_subscriptions WHERE unsubscribe_token = $1",
     [unsubToken],
   );
   return (r.rowCount ?? 0) > 0;
@@ -79,7 +79,7 @@ export async function listVerifiedSubscriptions(): Promise<AlertSubscription[]> 
             verified, verify_token, unsubscribe_token,
             ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lng,
             last_notified_at
-       FROM alert_subscriptions
+       FROM civic.alert_subscriptions
        WHERE verified = TRUE`,
   );
   return r.rows;
@@ -100,7 +100,7 @@ export async function findNewProjectsForSubscription(
   const since = sub.last_notified_at ?? new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
   const r = await query<NewProjectForAlert>(
     `SELECT p.id, p.name, p.project_type, p.status, p.address, p.neighborhood
-       FROM projects p
+       FROM civic.projects p
        WHERE p.project_type = ANY($1)
          AND p.first_seen_at > $2
          AND ST_DWithin(
@@ -108,7 +108,7 @@ export async function findNewProjectsForSubscription(
                ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
                $5)
          AND NOT EXISTS (
-           SELECT 1 FROM alert_log al
+           SELECT 1 FROM civic.alert_log al
              WHERE al.subscription_id = $6 AND al.project_id = p.id
          )
        ORDER BY p.first_seen_at DESC
@@ -121,13 +121,13 @@ export async function findNewProjectsForSubscription(
 export async function markAlertsSent(subId: number, projectIds: number[]) {
   if (!projectIds.length) return;
   await query(
-    `INSERT INTO alert_log (subscription_id, project_id)
+    `INSERT INTO civic.alert_log (subscription_id, project_id)
      SELECT $1, x FROM UNNEST($2::bigint[]) AS t(x)
      ON CONFLICT DO NOTHING`,
     [subId, projectIds],
   );
   await query(
-    "UPDATE alert_subscriptions SET last_notified_at = NOW() WHERE id = $1",
+    "UPDATE civic.alert_subscriptions SET last_notified_at = NOW() WHERE id = $1",
     [subId],
   );
 }

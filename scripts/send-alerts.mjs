@@ -33,7 +33,7 @@ async function main() {
            verify_token, unsubscribe_token,
            ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lng,
            last_notified_at
-      FROM alert_subscriptions
+      FROM civic.alert_subscriptions
       WHERE verified = TRUE
   `);
 
@@ -42,12 +42,12 @@ async function main() {
     const since = sub.last_notified_at || new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
     const newOnes = await pool.query(`
       SELECT p.id, p.name, p.project_type, p.status, p.address, p.neighborhood
-        FROM projects p
+        FROM civic.projects p
        WHERE p.project_type = ANY($1)
          AND p.first_seen_at > $2
          AND ST_DWithin(p.geom, ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography, $5)
          AND NOT EXISTS (
-           SELECT 1 FROM alert_log al
+           SELECT 1 FROM civic.alert_log al
              WHERE al.subscription_id = $6 AND al.project_id = p.id
          )
        ORDER BY p.first_seen_at DESC
@@ -88,11 +88,11 @@ Unsubscribe: ${unsub}
     }
 
     await pool.query(`
-      INSERT INTO alert_log (subscription_id, project_id)
+      INSERT INTO civic.alert_log (subscription_id, project_id)
         SELECT $1, x FROM UNNEST($2::bigint[]) AS t(x)
         ON CONFLICT DO NOTHING
     `, [sub.id, newOnes.rows.map((p) => p.id)]);
-    await pool.query("UPDATE alert_subscriptions SET last_notified_at = NOW() WHERE id = $1", [sub.id]);
+    await pool.query("UPDATE civic.alert_subscriptions SET last_notified_at = NOW() WHERE id = $1", [sub.id]);
   }
 
   console.log(`done. ${totalSent} project notifications sent across ${subs.rowCount} subscriptions.`);

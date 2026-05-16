@@ -1,62 +1,76 @@
-// Philadelphia ZBA decisions loader.
+// Philadelphia zoning permits loader. Pulls from the city's Carto SQL API,
+// which has L&I building and zoning permits from 2007 to present. We grab
+// only the last 2 years of zoning-type permits.
 //
 //   node scripts/scrape-zoning.mjs
 
-import {
-  pool, fetchArcgisAll, pointFromFeature, upsertProjects, asDate,
-} from "./_lib.mjs";
+import { pool, upsertProjects, asDate } from "./_lib.mjs";
 
-const ENDPOINT =
-  "https://services.arcgis.com/fLeGjb7u4uXqeF9q/ArcGIS/rest/services/ZBA_Decisions/FeatureServer/0/query";
+const CARTO = "https://phl.carto.com/api/v2/sql";
 const DATASOURCE = "phl-zoning";
 
 const PHL_BBOX = { minLat: 39.85, maxLat: 40.15, minLng: -75.30, maxLng: -74.95 };
 
-function normalizeStatus(decision) {
-  const d = (decision || "").toLowerCase();
-  if (d.includes("granted") || d.includes("approved")) return "approved";
-  if (d.includes("denied") || d.includes("refused")) return "cancelled";
-  if (d.includes("withdrawn") || d.includes("dismissed")) return "cancelled";
-  if (d.includes("continued") || d.includes("pending")) return "proposed";
-  return "unknown";
+const SQL = `
+  SELECT permitnumber, permittype, permitdescription, typeofwork,
+         approvedscopeofwork, status, permitissuedate, address, zip,
+         commercialorresidential, contractorname,
+         ST_X(the_geom) AS lng, ST_Y(the_geom) AS lat
+    FROM permits
+   WHERE permittype IN ('Zoning','ZP_ZONING','ZP_USE','ZP_ADMIN')
+     AND permitissuedate >= NOW() - INTERVAL '2 years'
+     AND the_geom IS NOT NULL
+   ORDER BY permitissuedate DESC
+   LIMIT 5000
+`;
+
+function normalizeStatus(s) {
+  const v = (s || "").toLowerCase();
+  if (v.includes("complete") || v.includes("closed")) return "completed";
+  if (v.includes("issued") || v.includes("active")) return "approved";
+  if (v.includes("denied") || v.includes("revoked") || v.includes("void")) return "cancelled";
+  if (v.includes("withdrawn") || v.includes("cancel")) return "cancelled";
+  if (v.includes("pending") || v.includes("hold") || v.includes("review")) return "proposed";
+  return "approved";
 }
 
-function toProject(feat) {
-  const a = feat.attributes || {};
-  const pt = pointFromFeature(feat);
-  if (!pt) return null;
-  if (pt.lat < PHL_BBOX.minLat || pt.lat > PHL_BBOX.maxLat) return null;
-  if (pt.lng < PHL_BBOX.minLng || pt.lng > PHL_BBOX.maxLng) return null;
+function toProject(row) {
+  const lat = Number(row.lat);
+  const lng = Number(row.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat < PHL_BBOX.minLat || lat > PHL_BBOX.maxLat) return null;
+  if (lng < PHL_BBOX.minLng || lng > PHL_BBOX.maxLng) return null;
 
-  const caseNo = a.application_number || a.app_number || a.objectid;
+  const name = row.permitdescription
+    ? `Zoning: ${row.permitdescription}`
+    : `Zoning permit ${row.permitnumber}`;
+
   return {
-    external_id: String(caseNo),
+    external_id: row.permitnumber,
     project_type: "zoning",
-    name: `ZBA ${caseNo}: ${a.appeal_type || "Variance"}`,
-    description: a.appeal_grounds || a.refusal_reason || null,
-    address: a.address || a.location || null,
-    neighborhood: a.neighborhood || null,
-    council_district: a.council_district ? String(a.council_district) : null,
-    zip_code: a.zip_code ? String(a.zip_code) : null,
-    status: normalizeStatus(a.decision),
-    approved_date: asDate(a.decision_date),
-    source_url: "https://opendataphilly.org/datasets/zoning-board-of-adjustment-zba-decisions/",
-    raw_attrs: a,
-    lat: pt.lat,
-    lng: pt.lng,
+    name,
+    description: row.approvedscopeofwork || row.typeofwork || null,
+    address: row.address || null,
+    zip_code: row.zip || null,
+    status: normalizeStatus(row.status),
+    approved_date: asDate(row.permitissuedate),
+    source_url: `https://www.phila.gov/li/PERMITS/Pages/PermitDetails.aspx?p=${encodeURIComponent(row.permitnumber)}`,
+    raw_attrs: row,
+    lat,
+    lng,
   };
 }
 
 async function main() {
-  console.log(`fetching ${DATASOURCE}...`);
-  const features = await fetchArcgisAll(ENDPOINT, {
-    // ZBA data goes back to the 90s; we only care about the last 5 years
-    // for "what's happening now". Adjust if you want a deeper history.
-    where: "decision_date >= TIMESTAMP '2021-01-01 00:00:00'",
-  });
-  console.log(`got ${features.length} features`);
-  const projects = features.map(toProject).filter(Boolean);
-  console.log(`upserting ${projects.length} in-bounds projects...`);
+  console.log(`fetching ${DATASOURCE} from Carto...`);
+  const url = `${CARTO}?q=${encodeURIComponent(SQL)}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`carto ${resp.status}: ${resp.statusText}`);
+  const json = await resp.json();
+  const rows = json.rows ?? [];
+  console.log(`got ${rows.length} rows`);
+  const projects = rows.map(toProject).filter(Boolean);
+  console.log(`upserting ${projects.length} in-bounds zoning permits...`);
   const { inserted, updated } = await upsertProjects(DATASOURCE, projects);
   console.log(`done. ${inserted} new, ${updated} updated.`);
   await pool.end();

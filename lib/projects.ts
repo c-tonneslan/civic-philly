@@ -56,7 +56,7 @@ export async function listMapProjects(filters: ProjectFilters): Promise<MapProje
     SELECT id, project_type, status, name,
            ST_Y(geom::geometry) AS lat,
            ST_X(geom::geometry) AS lng
-    FROM projects
+    FROM civic.projects
     ${whereSql}
     LIMIT 5000
   `;
@@ -76,7 +76,7 @@ export async function listProjects(filters: ProjectFilters, limit = 50, offset =
       source_url, first_seen_at,
       ST_Y(geom::geometry) AS lat,
       ST_X(geom::geometry) AS lng
-    FROM projects
+    FROM civic.projects
     ${whereSql}
     ORDER BY
       CASE WHEN status = 'under_construction' THEN 0
@@ -99,7 +99,7 @@ export async function getProject(id: number): Promise<Project | null> {
        source_url, first_seen_at,
        ST_Y(geom::geometry) AS lat,
        ST_X(geom::geometry) AS lng
-     FROM projects WHERE id = $1`,
+     FROM civic.projects WHERE id = $1`,
     [id],
   );
   return r.rows[0] ?? null;
@@ -108,7 +108,7 @@ export async function getProject(id: number): Promise<Project | null> {
 export async function listNeighborhoods(): Promise<string[]> {
   const r = await query<{ neighborhood: string }>(
     `SELECT DISTINCT neighborhood
-     FROM projects
+     FROM civic.projects
      WHERE neighborhood IS NOT NULL AND neighborhood <> ''
      ORDER BY neighborhood`,
   );
@@ -118,7 +118,7 @@ export async function listNeighborhoods(): Promise<string[]> {
 export async function listFundingSources(): Promise<string[]> {
   const r = await query<{ funding_source: string }>(
     `SELECT DISTINCT funding_source
-     FROM projects
+     FROM civic.projects
      WHERE funding_source IS NOT NULL AND funding_source <> ''
      ORDER BY funding_source`,
   );

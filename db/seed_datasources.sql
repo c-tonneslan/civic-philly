@@ -1,7 +1,7 @@
 -- Seed rows for each upstream feed. quality_notes is what the UI shows
 -- in the data quality panel; keep it honest.
 
-INSERT INTO datasources (id, name, agency, homepage_url, feed_url, license, description, quality_notes)
+INSERT INTO civic.datasources (id, name, agency, homepage_url, feed_url, license, description, quality_notes)
 VALUES
   ('phl-housing',
    'Affordable Housing Production',
@@ -13,13 +13,13 @@ VALUES
    'Updated quarterly. fiscal_year_complete is sometimes just a year (2018) which we fold to Jan 1. No AMI breakdown. No council district on the source record (we backfill via spatial join). Older projects may be missing addresses.'
   ),
   ('phl-zoning',
-   'Zoning Board of Adjustment Decisions',
-   'Philadelphia ZBA',
-   'https://opendataphilly.org/datasets/zoning-board-of-adjustment-zba-decisions/',
-   'https://services.arcgis.com/fLeGjb7u4uXqeF9q/ArcGIS/rest/services/ZBA_Decisions/FeatureServer/0/query',
+   'Zoning Permits (last 2 years)',
+   'Philadelphia L&I',
+   'https://opendataphilly.org/datasets/licenses-and-inspections-building-and-zoning-permits/',
+   'https://phl.carto.com/api/v2/sql',
    'Public Domain',
-   'ZBA variance and special exception decisions. One row per case.',
-   'Status uses ZBA decision codes (approved/denied/withdrawn). Address geocoding by the city is imperfect; ~5% of rows fall outside Philadelphia and are dropped. Updated weekly but with multi-week lag during busy hearing schedules.'
+   'Every issued zoning permit in the last two years. One row per permit number.',
+   'Pulled from the city''s Carto SQL API. Capped at 5000 most-recent permits per refresh. Geocoding is by the city L&I system and is decent but not perfect; ~1% of permits fall outside Philadelphia bounds and get dropped. Status field is normalized from L&I''s free-text values with a best-effort mapping. The Zoning Board of Adjustment decisions dataset (which would have been a better fit) appears to have been retired from OpenDataPhilly.'
   ),
   ('septa-capital',
    'SEPTA Capital Budget Projects',
@@ -31,13 +31,13 @@ VALUES
    'Manually curated, not a live feed. Refreshed each budget cycle (annual). Locations are approximate for line-wide projects (we plot the project at the line midpoint). Funding amounts are total project cost, not annual spend.'
   ),
   ('phl-infrastructure',
-   'Capital Program Projects',
-   'City of Philadelphia / Office of the Director of Finance',
-   'https://opendataphilly.org/datasets/capital-program-projects/',
-   'https://services.arcgis.com/fLeGjb7u4uXqeF9q/ArcGIS/rest/services/Capital_Program_Projects/FeatureServer/0/query',
+   'Major Capital Infrastructure Projects',
+   'City of Philadelphia + partners',
+   'https://www.phila.gov/programs/rebuild/',
+   'manual-cip-curation',
    'Public Domain',
-   'City-funded infrastructure projects from the six-year capital program.',
-   'Geometry is sometimes a polygon (we centroid it). Some rows have funding flagged but no dollar amount (we leave it null rather than guessing). Status field is free-text in the source and we normalize it with a best-effort mapping.'
+   'Major Philadelphia capital infrastructure projects (highway caps, school replacements, FDR Park, Rebuild, the Roosevelt Boulevard project, etc.). Hand-curated from the published CIP and agency press releases.',
+   'Hand-curated, not a live feed. The Office of the Director of Finance does publish the six-year Capital Improvement Program PDF, but there''s no machine-readable feed; the dataset listed on OpenDataPhilly returns 404. Refreshed manually when the CIP is updated (annual budget cycle). Funding amounts are project lifetime totals, not annual spend. Locations are approximated for citywide programs.'
   )
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,

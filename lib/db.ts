@@ -13,6 +13,9 @@ function getPool(): Pool {
     connectionString: url,
     ssl: /supabase|neon/.test(url) ? { rejectUnauthorized: false } : false,
     max: 5,
+    // Keep our tables in their own schema. On Supabase, PostGIS lives in
+    // the `extensions` schema so include it for ST_DWithin etc.
+    options: "-c search_path=civic,extensions,public",
   });
   return globalThis.__civicPhillyPool;
 }

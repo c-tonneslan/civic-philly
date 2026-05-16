@@ -15,6 +15,7 @@ const { Pool } = pg;
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: /supabase|neon/.test(process.env.DATABASE_URL) ? { rejectUnauthorized: false } : false,
+  options: "-c search_path=civic,extensions,public",
 });
 
 // Paginate an ArcGIS FeatureServer query endpoint until exhausted.
@@ -58,7 +59,7 @@ export function pointFromFeature(feat) {
 }
 
 const UPSERT_SQL = `
-INSERT INTO projects (
+INSERT INTO civic.projects (
   datasource_id, external_id, project_type, name, description, address,
   neighborhood, council_district, zip_code, status, funding_source,
   funding_amount, units_total, units_affordable,
@@ -123,13 +124,13 @@ export async function upsertProjects(datasourceId, projects) {
       if (r.rows[0]?.inserted) inserted++; else updated++;
     }
     await client.query(
-      "UPDATE datasources SET last_fetched_at = NOW(), record_count = $2, status = 'ok' WHERE id = $1",
+      "UPDATE civic.datasources SET last_fetched_at = NOW(), record_count = $2, status = 'ok' WHERE id = $1",
       [datasourceId, projects.length],
     );
     await client.query("COMMIT");
   } catch (e) {
     await client.query("ROLLBACK").catch(() => {});
-    await pool.query("UPDATE datasources SET status = 'degraded' WHERE id = $1", [datasourceId]).catch(() => {});
+    await pool.query("UPDATE civic.datasources SET status = 'degraded' WHERE id = $1", [datasourceId]).catch(() => {});
     throw e;
   } finally {
     client.release();
