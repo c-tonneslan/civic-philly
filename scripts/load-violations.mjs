@@ -1,0 +1,74 @@
+// Load L&I housing-code violations as a denser displacement signal than
+// demolition permits. We grab open + recent violations from the city's
+// Carto SQL API and clip to Philly bounds.
+//
+//   node scripts/load-violations.mjs
+
+import { pool } from "./_lib.mjs";
+
+const CARTO = "https://phl.carto.com/api/v2/sql";
+
+// Most-recent residential / housing-code violations only.
+const SQL = `
+  SELECT casenumber, violationnumber, violationdate, address,
+         violationcodetitle, casestatus,
+         ST_X(the_geom) AS lng, ST_Y(the_geom) AS lat
+    FROM violations
+   WHERE violationdate >= NOW() - INTERVAL '1 year'
+     AND the_geom IS NOT NULL
+     AND casetype = 'NOTICE OF VIOLATION'
+   ORDER BY violationdate DESC
+   LIMIT 5000
+`;
+
+const PHL_BBOX = { minLat: 39.85, maxLat: 40.15, minLng: -75.30, maxLng: -74.95 };
+
+async function main() {
+  console.log("fetching L&I violations...");
+  const resp = await fetch(`${CARTO}?q=${encodeURIComponent(SQL)}`);
+  if (!resp.ok) throw new Error(`carto ${resp.status}`);
+  const json = await resp.json();
+  const rows = json.rows ?? [];
+  console.log(`got ${rows.length} rows`);
+
+  const client = await pool.connect();
+  let n = 0;
+  try {
+    await client.query("BEGIN");
+    await client.query("TRUNCATE civic.violations RESTART IDENTITY");
+    for (const r of rows) {
+      const lat = Number(r.lat), lng = Number(r.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+      if (lat < PHL_BBOX.minLat || lat > PHL_BBOX.maxLat) continue;
+      if (lng < PHL_BBOX.minLng || lng > PHL_BBOX.maxLng) continue;
+      const date = r.violationdate ? r.violationdate.slice(0, 10) : null;
+      if (!date) continue;
+      try {
+        await client.query(
+          `INSERT INTO civic.violations
+             (external_id, case_number, violation_date, address, violation_type, status, geom)
+           VALUES ($1,$2,$3,$4,$5,$6, ST_SetSRID(ST_MakePoint($7,$8),4326)::geography)
+           ON CONFLICT (external_id) DO NOTHING`,
+          [r.violationnumber, r.casenumber, date, r.address, r.violationcodetitle, r.casestatus, lng, lat],
+        );
+        n++;
+      } catch {
+        // skip rows that fail any constraint
+      }
+    }
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  console.log(`done. ${n} violations loaded.`);
+  await pool.end();
+}
+
+main().catch(async (e) => {
+  console.error(e);
+  await pool.end().catch(() => {});
+  process.exit(1);
+});

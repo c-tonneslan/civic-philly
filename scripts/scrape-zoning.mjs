@@ -14,6 +14,7 @@ const PHL_BBOX = { minLat: 39.85, maxLat: 40.15, minLng: -75.30, maxLng: -74.95 
 const SQL = `
   SELECT permitnumber, permittype, permitdescription, typeofwork,
          approvedscopeofwork, status, permitissuedate, address, zip,
+         opa_account_num, parcel_id_num,
          commercialorresidential, contractorname,
          ST_X(the_geom) AS lng, ST_Y(the_geom) AS lat
     FROM permits
@@ -56,6 +57,7 @@ function toProject(row) {
     approved_date: asDate(row.permitissuedate),
     source_url: `https://www.phila.gov/li/PERMITS/Pages/PermitDetails.aspx?p=${encodeURIComponent(row.permitnumber)}`,
     raw_attrs: row,
+    opa_account: row.opa_account_num || null,
     lat,
     lng,
   };

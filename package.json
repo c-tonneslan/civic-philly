@@ -19,6 +19,8 @@
     "load:officials": "node scripts/load-officials.mjs",
     "load:rcos": "node scripts/load-rcos.mjs",
     "load:displacement": "node scripts/load-displacement.mjs",
+    "load:violations": "node scripts/load-violations.mjs",
+    "load:owners": "node scripts/load-owners.mjs",
     "backfill:developers": "node scripts/backfill-developers.mjs",
     "backfill:spatial": "node scripts/backfill-spatial.mjs",
     "alerts:send": "node scripts/send-alerts.mjs",

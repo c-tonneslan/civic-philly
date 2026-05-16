@@ -31,6 +31,7 @@ export default function MapView({ points, filters }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<OverlayId>("none");
   const [showDemolitions, setShowDemolitions] = useState(false);
+  const [showViolations, setShowViolations] = useState(false);
 
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
@@ -87,8 +88,19 @@ export default function MapView({ points, filters }: Props) {
           "circle-stroke-color": "#0b0c0e",
         },
       });
-      // Hide by default.
       map.setLayoutProperty("demolitions-circles", "visibility", "none");
+
+      // Violations source.
+      map.addSource("violations", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "violations-circles", type: "circle", source: "violations",
+        paint: {
+          "circle-color": "#f59e0b",
+          "circle-radius": 3,
+          "circle-opacity": 0.55,
+        },
+      });
+      map.setLayoutProperty("violations-circles", "visibility", "none");
 
       // Projects (clustered).
       map.addSource("projects", {
@@ -275,6 +287,24 @@ export default function MapView({ points, filters }: Props) {
     else map.once("load", apply);
   }, [showDemolitions]);
 
+  // Violations layer toggle.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const apply = async () => {
+      map.setLayoutProperty("violations-circles", "visibility", showViolations ? "visible" : "none");
+      if (showViolations) {
+        const src = map.getSource("violations") as GeoJSONSource | undefined;
+        if (!src) return;
+        const resp = await fetch("/api/overlays/violations");
+        if (!resp.ok) return;
+        src.setData(await resp.json());
+      }
+    };
+    if (map.isStyleLoaded()) apply();
+    else map.once("load", apply);
+  }, [showViolations]);
+
   // If we have a `near` filter, fly there.
   useEffect(() => {
     const map = mapRef.current;
@@ -290,19 +320,27 @@ export default function MapView({ points, filters }: Props) {
           {error}
         </div>
       )}
-      <Overlays overlay={overlay} setOverlay={setOverlay} showDemolitions={showDemolitions} setShowDemolitions={setShowDemolitions} />
+      <Overlays
+        overlay={overlay} setOverlay={setOverlay}
+        showDemolitions={showDemolitions} setShowDemolitions={setShowDemolitions}
+        showViolations={showViolations} setShowViolations={setShowViolations}
+      />
       <Legend />
     </>
   );
 }
 
 function Overlays({
-  overlay, setOverlay, showDemolitions, setShowDemolitions,
+  overlay, setOverlay,
+  showDemolitions, setShowDemolitions,
+  showViolations, setShowViolations,
 }: {
   overlay: OverlayId;
   setOverlay: (v: OverlayId) => void;
   showDemolitions: boolean;
   setShowDemolitions: (v: boolean) => void;
+  showViolations: boolean;
+  setShowViolations: (v: boolean) => void;
 }) {
   return (
     <div className="absolute top-4 left-4 bg-[var(--panel)]/95 backdrop-blur border border-[var(--line)] rounded-lg px-3 py-2.5 text-xs shadow-lg space-y-2 min-w-[230px]">
@@ -316,7 +354,11 @@ function Overlays({
       </select>
       <label className="flex items-center gap-2 text-xs pt-1">
         <input type="checkbox" checked={showDemolitions} onChange={(e) => setShowDemolitions(e.target.checked)} />
-        <span>Demolition permits (3y)</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-600 inline-block" />Demolition permits (3y)</span>
+      </label>
+      <label className="flex items-center gap-2 text-xs">
+        <input type="checkbox" checked={showViolations} onChange={(e) => setShowViolations(e.target.checked)} />
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Housing-code violations (1y)</span>
       </label>
     </div>
   );

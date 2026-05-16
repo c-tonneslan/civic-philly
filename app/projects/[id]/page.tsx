@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getProject } from "@/lib/projects";
 import { getDatasource } from "@/lib/datasources";
@@ -6,17 +7,35 @@ import {
   getSiblingProjects, getDistrict, getDistrictOfficial,
   getTract, getDisplacementWithin, getStatusHistory, getRCO,
 } from "@/lib/context";
+import { getOwnerByParcel } from "@/lib/owners";
 import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
 import MiniMap from "@/components/MiniMap";
 import StatusTimeline from "@/components/StatusTimeline";
 
 export const dynamic = "force-dynamic";
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const project = await getProject(Number(id)).catch(() => null);
+  if (!project) return { title: "Project not found · civic-philly" };
+  const bits = [
+    project.address,
+    project.neighborhood,
+    project.units_total ? `${project.units_total} units` : null,
+    project.developer,
+  ].filter(Boolean).join(" · ");
+  return {
+    title: `${project.name} · civic-philly`,
+    description: bits || "Project on the civic-philly map.",
+    openGraph: { title: project.name, description: bits },
+  };
+}
+
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const project = await getProject(Number(id));
   if (!project) notFound();
-  const [ds, siblings, district, official, tract, demolitions, history, rco] = await Promise.all([
+  const [ds, siblings, district, official, tract, demolitions, history, rco, owner] = await Promise.all([
     getDatasource(project.datasource_id),
     getSiblingProjects(project.lat, project.lng, 400, project.id, 8),
     project.council_district_id ? getDistrict(project.council_district_id) : Promise.resolve(null),
@@ -25,6 +44,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     getDisplacementWithin(project.lat, project.lng, 400, 3, 20),
     getStatusHistory(project.id),
     project.rco_id ? getRCO(project.rco_id) : Promise.resolve(null),
+    project.opa_account ? getOwnerByParcel(project.opa_account) : Promise.resolve(null),
   ]);
 
   return (
@@ -51,6 +71,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
         <dl className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5 text-sm">
           <Field label="Council district" value={district ? `District ${district.district_id}` : null} href={district ? `/districts/${district.district_id}` : undefined} />
           <Field label="Developer / applicant" value={project.developer} href={project.developer ? `/developers/${encodeURIComponent(project.developer)}` : undefined} />
+          <Field label="Property owner" value={owner?.owner_1 ?? null} href={owner?.owner_1 ? `/owners/${encodeURIComponent(owner.owner_1)}` : undefined} />
+          <Field label="OPA account" value={project.opa_account} />
           <Field label="Neighborhood" value={project.neighborhood} />
           <Field label="ZIP" value={project.zip_code} />
           <Field label="Funding source" value={project.funding_source} />

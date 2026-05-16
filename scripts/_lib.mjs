@@ -63,13 +63,15 @@ INSERT INTO civic.projects (
   datasource_id, external_id, project_type, name, description, address,
   neighborhood, council_district, zip_code, status, funding_source,
   funding_amount, units_total, units_affordable,
-  start_date, completion_date, approved_date, source_url, raw_attrs, geom
+  start_date, completion_date, approved_date, source_url, raw_attrs, geom,
+  opa_account
 ) VALUES (
   $1,$2,$3,$4,$5,$6,
   $7,$8,$9,$10,$11,
   $12,$13,$14,
   $15,$16,$17,$18,$19,
-  ST_SetSRID(ST_MakePoint($20,$21),4326)::geography
+  ST_SetSRID(ST_MakePoint($20,$21),4326)::geography,
+  $22
 )
 ON CONFLICT (datasource_id, external_id) DO UPDATE SET
   name = EXCLUDED.name,
@@ -87,6 +89,7 @@ ON CONFLICT (datasource_id, external_id) DO UPDATE SET
   source_url = EXCLUDED.source_url,
   raw_attrs = EXCLUDED.raw_attrs,
   geom = EXCLUDED.geom,
+  opa_account = COALESCE(EXCLUDED.opa_account, civic.projects.opa_account),
   imported_at = NOW()
 RETURNING id, (xmax = 0) AS inserted, status;
 `;
@@ -120,6 +123,7 @@ export async function upsertProjects(datasourceId, projects) {
         p.raw_attrs ? JSON.stringify(p.raw_attrs) : null,
         p.lng,
         p.lat,
+        p.opa_account ?? null,
       ]);
       const row = r.rows[0];
       if (row?.inserted) inserted++; else updated++;

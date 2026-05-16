@@ -31,6 +31,7 @@ export interface Project {
   census_tract_geoid: string | null;
   rco_id: number | null;
   developer: string | null;
+  opa_account: string | null;
   lat: number;
   lng: number;
   first_seen_at: string;

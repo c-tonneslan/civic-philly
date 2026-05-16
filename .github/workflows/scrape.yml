@@ -22,10 +22,13 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run scrape:all
-      - name: refresh demolition permits
+      - name: refresh demolition permits + violations + owners
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npm run load:displacement
+        run: |
+          npm run load:displacement
+          npm run load:violations
+          npm run load:owners
       - name: backfill developer + spatial joins for new rows
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

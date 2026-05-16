@@ -89,7 +89,7 @@ export async function listProjects(filters: ProjectFilters, limit = 50, offset =
       neighborhood, council_district, zip_code, status, funding_source, funding_amount,
       units_total, units_affordable, start_date, completion_date, approved_date,
       source_url, first_seen_at, council_district_id, census_tract_geoid,
-      rco_id, developer,
+      rco_id, developer, opa_account,
       ST_Y(geom::geometry) AS lat,
       ST_X(geom::geometry) AS lng
     FROM civic.projects
@@ -113,7 +113,7 @@ export async function getProject(id: number): Promise<Project | null> {
        neighborhood, council_district, zip_code, status, funding_source, funding_amount,
        units_total, units_affordable, start_date, completion_date, approved_date,
        source_url, first_seen_at, council_district_id, census_tract_geoid,
-       rco_id, developer,
+       rco_id, developer, opa_account,
        ST_Y(geom::geometry) AS lat,
        ST_X(geom::geometry) AS lng
      FROM civic.projects WHERE id = $1`,

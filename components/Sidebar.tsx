@@ -224,11 +224,13 @@ export default function Sidebar({ projects, neighborhoods, fundingSources, activ
       </div>
 
       <footer className="px-5 py-3 border-t border-[var(--line)] flex items-center justify-between gap-2 text-[11px] text-[var(--ink-dim)] flex-wrap">
+        <Link href="/this-week" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">This week</Link>
         <Link href="/districts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Districts</Link>
-        <Link href="/developers" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Developers</Link>
+        <Link href="/developers" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Devs</Link>
+        <Link href="/owners" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Owners</Link>
         <Link href="/stalled" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Stalled</Link>
         <Link href="/alerts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Alerts</Link>
-        <Link href="/methodology" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Methodology</Link>
+        <Link href="/methodology" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Methods</Link>
       </footer>
     </div>
   );
