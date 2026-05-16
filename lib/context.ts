@@ -205,7 +205,10 @@ export async function getTractsForChoropleth(
     asian: "pct_asian",
   }[metric];
   const r = await query<TractChoroplethRow>(
-    `SELECT geoid, ${col} AS value, ST_AsGeoJSON(geom::geometry) AS geom_geojson
+    // Cast NUMERIC columns to float8 so pg returns them as JS numbers.
+    // Otherwise they come back as strings and the maplibre interpolate
+    // expression errors with "Expected number but found string instead."
+    `SELECT geoid, ${col}::float8 AS value, ST_AsGeoJSON(geom::geometry) AS geom_geojson
        FROM civic.census_tracts
        WHERE ${col} IS NOT NULL`,
   );

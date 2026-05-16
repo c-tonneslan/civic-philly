@@ -253,15 +253,22 @@ export default function MapView({ points, filters }: Props) {
       const resp = await fetch(`/api/overlays/tracts?metric=${overlay}`);
       if (!resp.ok) return;
       const data = await resp.json();
-      // Compute a domain from the data so colors stretch to actual range.
-      const values: number[] = data.features.map((f: { properties: { value: number | null } }) => f.properties.value).filter((v: number | null): v is number => v != null);
+      // Coerce values to numbers defensively. NUMERIC columns sometimes
+      // come back as strings even though we cast in SQL.
+      for (const f of data.features) {
+        const raw = f.properties?.value;
+        f.properties.value = raw == null ? null : Number(raw);
+      }
+      const values: number[] = data.features
+        .map((f: { properties: { value: number | null } }) => f.properties.value)
+        .filter((v: number | null): v is number => v != null && Number.isFinite(v));
       if (values.length === 0) return;
       const sorted = [...values].sort((a, b) => a - b);
-      const lo = sorted[Math.floor(sorted.length * 0.05)];
-      const hi = sorted[Math.floor(sorted.length * 0.95)];
+      const lo = Number(sorted[Math.floor(sorted.length * 0.05)]);
+      const hi = Number(sorted[Math.floor(sorted.length * 0.95)]);
       src.setData(data);
       map.setPaintProperty("tracts-fill", "fill-color", [
-        "interpolate", ["linear"], ["coalesce", ["get", "value"], lo],
+        "interpolate", ["linear"], ["to-number", ["coalesce", ["get", "value"], lo]],
         lo, "#1a3a52", (lo + hi) / 2, "#d97706", hi, "#ea580c",
       ]);
     };
