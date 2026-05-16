@@ -12,10 +12,11 @@ function getPool(): Pool {
   globalThis.__civicPhillyPool = new Pool({
     connectionString: url,
     ssl: /supabase|neon/.test(url) ? { rejectUnauthorized: false } : false,
-    max: 5,
-    // Keep our tables in their own schema. On Supabase, PostGIS lives in
-    // the `extensions` schema so include it for ST_DWithin etc.
-    options: "-c search_path=civic,extensions,public",
+    // Vercel serverless: small pool, fast turnover. The Supabase transaction
+    // pooler (port 6543) closes connections between queries, so don't keep
+    // many around.
+    max: 3,
+    idleTimeoutMillis: 10_000,
   });
   return globalThis.__civicPhillyPool;
 }

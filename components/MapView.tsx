@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl, { type Map as MapLibreMap, type GeoJSONSource } from "maplibre-gl";
 import type { MapProject } from "@/lib/projects";
 import type { ProjectFilters, ProjectType } from "@/lib/types";
@@ -17,17 +17,35 @@ const STYLE_URL = process.env.NEXT_PUBLIC_MAP_STYLE_URL || "https://tiles.openfr
 export default function MapView({ points, filters }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Initialize the map once.
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: STYLE_URL,
-      center: PHL_CENTER,
-      zoom: 11.5,
-      attributionControl: { compact: true },
+    let map: MapLibreMap;
+    try {
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: STYLE_URL,
+        center: PHL_CENTER,
+        zoom: 11.5,
+        attributionControl: { compact: true },
+      });
+    } catch (e) {
+      setError(`Map init failed: ${(e as Error).message}`);
+      console.error("maplibre init error", e);
+      return;
+    }
+    map.on("error", (e) => {
+      console.error("maplibre runtime error", e);
+      setError(`Map error: ${e.error?.message || "unknown"}`);
     });
+    // Force a resize after layout settles. Some layouts measure the container
+    // as zero at first paint, which makes maplibre fall back to a 300px canvas.
+    const forceResize = () => map.resize();
+    window.addEventListener("resize", forceResize);
+    requestAnimationFrame(forceResize);
+    setTimeout(forceResize, 200);
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
 
@@ -123,7 +141,11 @@ export default function MapView({ points, filters }: Props) {
     });
 
     mapRef.current = map;
-    return () => { map.remove(); mapRef.current = null; };
+    return () => {
+      window.removeEventListener("resize", forceResize);
+      map.remove();
+      mapRef.current = null;
+    };
   }, []);
 
   // Push new points whenever the props change.
@@ -154,10 +176,15 @@ export default function MapView({ points, filters }: Props) {
   }, [filters.near?.lat, filters.near?.lng]);
 
   return (
-    <>
+    <div className="relative w-full" style={{ height: "100vh" }}>
       <div ref={containerRef} className="absolute inset-0" />
+      {error && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[var(--panel)] border border-red-500/50 rounded-lg px-4 py-3 text-sm text-red-300 max-w-md shadow-lg z-10">
+          {error}
+        </div>
+      )}
       <Legend />
-    </>
+    </div>
   );
 }
 
