@@ -29,6 +29,8 @@ export interface Project {
   source_url: string | null;
   council_district_id: number | null;
   census_tract_geoid: string | null;
+  rco_id: number | null;
+  developer: string | null;
   lat: number;
   lng: number;
   first_seen_at: string;
@@ -107,6 +109,8 @@ export interface ProjectFilters {
   neighborhood?: string;
   fundingSource?: string;
   districtId?: number;
+  developer?: string;
+  q?: string;
   startYear?: number;
   endYear?: number;
   near?: { lat: number; lng: number; radiusMeters: number };

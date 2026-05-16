@@ -4,7 +4,7 @@ import { getProject } from "@/lib/projects";
 import { getDatasource } from "@/lib/datasources";
 import {
   getSiblingProjects, getDistrict, getDistrictOfficial,
-  getTract, getDisplacementWithin, getStatusHistory,
+  getTract, getDisplacementWithin, getStatusHistory, getRCO,
 } from "@/lib/context";
 import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
 import MiniMap from "@/components/MiniMap";
@@ -16,7 +16,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const project = await getProject(Number(id));
   if (!project) notFound();
-  const [ds, siblings, district, official, tract, demolitions, history] = await Promise.all([
+  const [ds, siblings, district, official, tract, demolitions, history, rco] = await Promise.all([
     getDatasource(project.datasource_id),
     getSiblingProjects(project.lat, project.lng, 400, project.id, 8),
     project.council_district_id ? getDistrict(project.council_district_id) : Promise.resolve(null),
@@ -24,6 +24,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
     project.census_tract_geoid ? getTract(project.census_tract_geoid) : Promise.resolve(null),
     getDisplacementWithin(project.lat, project.lng, 400, 3, 20),
     getStatusHistory(project.id),
+    project.rco_id ? getRCO(project.rco_id) : Promise.resolve(null),
   ]);
 
   return (
@@ -49,6 +50,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
 
         <dl className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-5 text-sm">
           <Field label="Council district" value={district ? `District ${district.district_id}` : null} href={district ? `/districts/${district.district_id}` : undefined} />
+          <Field label="Developer / applicant" value={project.developer} href={project.developer ? `/developers/${encodeURIComponent(project.developer)}` : undefined} />
           <Field label="Neighborhood" value={project.neighborhood} />
           <Field label="ZIP" value={project.zip_code} />
           <Field label="Funding source" value={project.funding_source} />
@@ -91,6 +93,26 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                   <div><span className="text-[var(--ink)]">{district.housing_units_total ?? 0}</span> housing units approved</div>
                 </div>
               )}
+            </div>
+          )}
+
+          {rco && (
+            <div className="border border-[var(--line)] rounded-lg p-5 bg-[var(--panel)]">
+              <div className="text-[10px] uppercase tracking-wider text-[var(--ink-dim)] mb-2">
+                Registered Community Organization
+              </div>
+              <div className="text-base font-medium">{rco.name}</div>
+              <div className="text-xs text-[var(--ink-dim)] mb-3">
+                The RCO that gets formal notice of zoning changes here. Going to them first is how
+                most organizing on a project starts.
+              </div>
+              <div className="text-xs space-y-1.5">
+                {rco.primary_name && <div className="text-[var(--ink-dim)]">Contact: {rco.primary_name}</div>}
+                {rco.primary_email && <div><a href={`mailto:${rco.primary_email}`} className="underline underline-offset-2 hover:text-[var(--ink)]">{rco.primary_email}</a></div>}
+                {rco.primary_phone && <div className="text-[var(--ink-dim)]">{rco.primary_phone}</div>}
+                {rco.website && <div><a href={rco.website} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-[var(--ink)] break-all">{rco.website}</a></div>}
+                {rco.meeting_info && <div className="text-[var(--ink-dim)]">Meets: {rco.meeting_info}</div>}
+              </div>
             </div>
           )}
 

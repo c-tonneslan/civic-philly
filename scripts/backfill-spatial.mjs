@@ -30,6 +30,24 @@ async function main() {
       `);
     console.log(`  updated ${r2.rowCount} projects with tract`);
 
+    console.log("backfilling rco_id...");
+    // RCO polygons overlap (a site sits in 2-4 RCOs typically). For the
+    // denormalized column we pick the smallest-area RCO containing the
+    // point, on the theory that the smaller one is the most local.
+    const r2b = await client.query(`
+      UPDATE civic.projects p
+         SET rco_id = sub.rco_id
+        FROM (
+          SELECT DISTINCT ON (p2.id) p2.id AS pid, r.id AS rco_id
+            FROM civic.projects p2
+            JOIN civic.rcos r ON ST_Intersects(p2.geom, r.geom)
+           ORDER BY p2.id, ST_Area(r.geom::geometry) ASC
+        ) sub
+       WHERE p.id = sub.pid
+         AND (p.rco_id IS NULL OR p.rco_id <> sub.rco_id)
+      `);
+    console.log(`  updated ${r2b.rowCount} projects with RCO`);
+
     console.log("backfilling status_history (initial snapshot for rows missing one)...");
     const r3 = await client.query(`
       INSERT INTO civic.status_history (project_id, status, observed_at)

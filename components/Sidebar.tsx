@@ -25,6 +25,8 @@ function buildQuery(filters: ProjectFilters): string {
   if (filters.neighborhood) sp.set("neighborhood", filters.neighborhood);
   if (filters.fundingSource) sp.set("funding", filters.fundingSource);
   if (filters.districtId) sp.set("district", String(filters.districtId));
+  if (filters.developer) sp.set("developer", filters.developer);
+  if (filters.q) sp.set("q", filters.q);
   if (filters.startYear) sp.set("startYear", String(filters.startYear));
   if (filters.endYear) sp.set("endYear", String(filters.endYear));
   if (filters.near) {
@@ -66,6 +68,7 @@ export default function Sidebar({ projects, neighborhoods, fundingSources, activ
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="px-5 py-4 border-b border-[var(--line)] space-y-4">
+        <SearchBox value={filters.q ?? ""} onChange={(q) => update({ q: q || undefined })} />
         <NearMe
           active={filters.near}
           onApply={(near) => update({ near })}
@@ -220,19 +223,12 @@ export default function Sidebar({ projects, neighborhoods, fundingSources, activ
         ))}
       </div>
 
-      <footer className="px-5 py-3 border-t border-[var(--line)] flex items-center justify-between gap-3 text-[11px] text-[var(--ink-dim)] flex-wrap">
-        <Link href="/districts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">
-          Districts
-        </Link>
-        <Link href="/stalled" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">
-          Stalled
-        </Link>
-        <Link href="/alerts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">
-          Alerts
-        </Link>
-        <Link href="/data" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">
-          Data
-        </Link>
+      <footer className="px-5 py-3 border-t border-[var(--line)] flex items-center justify-between gap-2 text-[11px] text-[var(--ink-dim)] flex-wrap">
+        <Link href="/districts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Districts</Link>
+        <Link href="/developers" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Developers</Link>
+        <Link href="/stalled" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Stalled</Link>
+        <Link href="/alerts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Alerts</Link>
+        <Link href="/methodology" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Methodology</Link>
       </footer>
     </div>
   );
@@ -240,4 +236,23 @@ export default function Sidebar({ projects, neighborhoods, fundingSources, activ
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <div className="text-[10px] uppercase tracking-wider text-[var(--ink-dim)] mb-1.5">{children}</div>;
+}
+
+function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [draft, setDraft] = useState(value);
+  // Don't fire on every keystroke; commit on enter or blur.
+  return (
+    <div>
+      <FieldLabel>Search</FieldLabel>
+      <input
+        type="search"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") onChange(draft.trim()); }}
+        onBlur={() => { if (draft.trim() !== value) onChange(draft.trim()); }}
+        placeholder="name, address, developer..."
+        className="w-full bg-[var(--panel-2)] border border-[var(--line)] rounded px-2 py-1.5 text-xs"
+      />
+    </div>
+  );
 }

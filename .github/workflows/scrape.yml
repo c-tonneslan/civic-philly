@@ -4,6 +4,8 @@ on:
   schedule:
     # Daily at 7am ET (12:00 UTC). The city ArcGIS feeds usually refresh overnight.
     - cron: "0 12 * * *"
+    # Sunday at 7am ET. Triggers the weekly digest job below.
+    - cron: "0 12 * * 0"
   workflow_dispatch:
 
 jobs:
@@ -20,6 +22,16 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run scrape:all
+      - name: refresh demolition permits
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run load:displacement
+      - name: backfill developer + spatial joins for new rows
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          npm run backfill:developers
+          npm run backfill:spatial
       - name: send alerts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -27,3 +39,20 @@ jobs:
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
           NEXT_PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
         run: npm run alerts:send
+
+  digest:
+    # Sunday at noon UTC (7am ET). Weekly per-district summary.
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && contains(github.event.schedule, '0 12 * * 0'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20", cache: "npm" }
+      - run: npm ci
+      - name: send weekly digests
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
+          NEXT_PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
+        run: npm run digest:send

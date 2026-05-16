@@ -32,6 +32,61 @@ export async function getAtLargeCouncil(): Promise<ElectedOfficial[]> {
   return r.rows;
 }
 
+export interface RCO {
+  id: number;
+  name: string;
+  primary_name: string | null;
+  primary_email: string | null;
+  primary_phone: string | null;
+  website: string | null;
+  meeting_info: string | null;
+}
+
+export async function getRCO(id: number): Promise<RCO | null> {
+  const r = await query<RCO>(
+    `SELECT id, name, primary_name, primary_email, primary_phone, website, meeting_info
+       FROM civic.rcos WHERE id = $1`,
+    [id],
+  );
+  return r.rows[0] ?? null;
+}
+
+// Year-by-year project counts for a district. Powers the chart on the
+// district page. Uses approved_date / start_date / first_seen_at in that
+// order of preference.
+export interface YearBucket {
+  year: number;
+  housing: number;
+  transit: number;
+  zoning: number;
+  infrastructure: number;
+}
+
+export async function getDistrictTimeSeries(districtId: number): Promise<YearBucket[]> {
+  const r = await query<{ year: number; project_type: string; n: string }>(`
+    SELECT year, project_type, COUNT(*)::text AS n
+      FROM (
+        SELECT EXTRACT(YEAR FROM COALESCE(approved_date, start_date, first_seen_at))::int AS year,
+               project_type
+          FROM civic.projects
+         WHERE council_district_id = $1
+           AND COALESCE(approved_date, start_date, first_seen_at) IS NOT NULL
+      ) x
+     WHERE year >= 2015
+     GROUP BY year, project_type
+     ORDER BY year ASC
+  `, [districtId]);
+  const buckets = new Map<number, YearBucket>();
+  for (const row of r.rows) {
+    if (!buckets.has(row.year)) {
+      buckets.set(row.year, { year: row.year, housing: 0, transit: 0, zoning: 0, infrastructure: 0 });
+    }
+    const b = buckets.get(row.year)!;
+    (b as unknown as Record<string, number>)[row.project_type] = Number(row.n);
+  }
+  return [...buckets.values()];
+}
+
 export async function getTract(geoid: string): Promise<CensusTract | null> {
   const r = await query<CensusTract>(
     `SELECT geoid, name, total_pop, median_hh_income, pct_rent_burdened, pct_renter,

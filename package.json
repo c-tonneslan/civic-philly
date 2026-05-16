@@ -14,7 +14,15 @@
     "scrape:septa": "node scripts/scrape-septa.mjs",
     "scrape:pha": "node scripts/scrape-pha.mjs",
     "scrape:all": "node scripts/scrape-all.mjs",
-    "alerts:send": "node scripts/send-alerts.mjs"
+    "load:districts": "node scripts/load-districts.mjs",
+    "load:census": "node scripts/load-census.mjs",
+    "load:officials": "node scripts/load-officials.mjs",
+    "load:rcos": "node scripts/load-rcos.mjs",
+    "load:displacement": "node scripts/load-displacement.mjs",
+    "backfill:developers": "node scripts/backfill-developers.mjs",
+    "backfill:spatial": "node scripts/backfill-spatial.mjs",
+    "alerts:send": "node scripts/send-alerts.mjs",
+    "digest:send": "node scripts/send-digest.mjs"
   },
   "dependencies": {
     "dotenv": "^17.4.2",

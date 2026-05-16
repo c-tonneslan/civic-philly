@@ -13,6 +13,8 @@ export function parseFiltersFromSearchParams(sp: URLSearchParams): ProjectFilter
   const neighborhood = sp.get("neighborhood") || undefined;
   const fundingSource = sp.get("funding") || undefined;
   const districtId = sp.get("district") ? Number(sp.get("district")) : undefined;
+  const developer = sp.get("developer") || undefined;
+  const q = sp.get("q") || undefined;
   const startYear = sp.get("startYear") ? Number(sp.get("startYear")) : undefined;
   const endYear = sp.get("endYear") ? Number(sp.get("endYear")) : undefined;
   const lat = sp.get("lat") ? Number(sp.get("lat")) : undefined;
@@ -23,7 +25,7 @@ export function parseFiltersFromSearchParams(sp: URLSearchParams): ProjectFilter
     : undefined;
 
   return {
-    types, statuses, neighborhood, fundingSource,
+    types, statuses, neighborhood, fundingSource, developer, q,
     districtId: Number.isFinite(districtId) ? districtId : undefined,
     startYear: Number.isFinite(startYear) ? startYear : undefined,
     endYear: Number.isFinite(endYear) ? endYear : undefined,

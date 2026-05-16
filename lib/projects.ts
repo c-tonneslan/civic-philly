@@ -24,6 +24,17 @@ function buildFilterClause(filters: ProjectFilters, params: unknown[]): string {
     params.push(filters.districtId);
     where.push(`council_district_id = $${params.length}`);
   }
+  if (filters.developer) {
+    params.push(filters.developer);
+    where.push(`developer = $${params.length}`);
+  }
+  if (filters.q) {
+    params.push(filters.q);
+    // websearch_to_tsquery is the user-friendly variant: handles
+    // multi-word queries, OR/AND, exact phrases in quotes. tsv is
+    // a STORED generated column so this hits the GIN index.
+    where.push(`tsv @@ websearch_to_tsquery('english', $${params.length})`);
+  }
   if (filters.startYear) {
     params.push(`${filters.startYear}-01-01`);
     where.push(`(start_date >= $${params.length} OR approved_date >= $${params.length} OR first_seen_at >= $${params.length})`);
@@ -78,6 +89,7 @@ export async function listProjects(filters: ProjectFilters, limit = 50, offset =
       neighborhood, council_district, zip_code, status, funding_source, funding_amount,
       units_total, units_affordable, start_date, completion_date, approved_date,
       source_url, first_seen_at, council_district_id, census_tract_geoid,
+      rco_id, developer,
       ST_Y(geom::geometry) AS lat,
       ST_X(geom::geometry) AS lng
     FROM civic.projects
@@ -101,6 +113,7 @@ export async function getProject(id: number): Promise<Project | null> {
        neighborhood, council_district, zip_code, status, funding_source, funding_amount,
        units_total, units_affordable, start_date, completion_date, approved_date,
        source_url, first_seen_at, council_district_id, census_tract_geoid,
+       rco_id, developer,
        ST_Y(geom::geometry) AS lat,
        ST_X(geom::geometry) AS lng
      FROM civic.projects WHERE id = $1`,

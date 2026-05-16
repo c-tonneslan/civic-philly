@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getDistrict, getDistrictOfficial } from "@/lib/context";
+import { getDistrict, getDistrictOfficial, getDistrictTimeSeries } from "@/lib/context";
 import { listProjects } from "@/lib/projects";
 import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
+import TimeSeriesChart from "@/components/TimeSeriesChart";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +12,11 @@ export default async function DistrictPage({ params }: { params: Promise<{ id: s
   const districtId = parseInt(id, 10);
   if (!Number.isFinite(districtId)) notFound();
 
-  const [district, official, projects] = await Promise.all([
+  const [district, official, projects, series] = await Promise.all([
     getDistrict(districtId),
     getDistrictOfficial(districtId),
     listProjects({ districtId }, 50, 0).catch(() => []),
+    getDistrictTimeSeries(districtId).catch(() => []),
   ]);
   if (!district) notFound();
 
@@ -73,6 +75,16 @@ export default async function DistrictPage({ params }: { params: Promise<{ id: s
             </div>
           </section>
         )}
+
+        <section className="mt-10">
+          <div className="flex items-end justify-between mb-3">
+            <h2 className="text-lg font-medium">Activity over time</h2>
+            <span className="text-xs text-[var(--ink-dim)]">by project type, by year</span>
+          </div>
+          <div className="border border-[var(--line)] rounded-lg p-5 bg-[var(--panel)]">
+            <TimeSeriesChart buckets={series} />
+          </div>
+        </section>
 
         <section className="mt-10">
           <div className="flex items-end justify-between mb-3">

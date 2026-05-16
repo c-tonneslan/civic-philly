@@ -95,7 +95,72 @@ Unsubscribe: ${unsub}
     await pool.query("UPDATE civic.alert_subscriptions SET last_notified_at = NOW() WHERE id = $1", [sub.id]);
   }
 
-  console.log(`done. ${totalSent} project notifications sent across ${subs.rowCount} subscriptions.`);
+  console.log(`new-project notifications: ${totalSent} across ${subs.rowCount} subscriptions.`);
+
+  // Status-change alerts: for every follow on a project, fire when a
+  // new status_history row has appeared since the last notify.
+  const followRows = await pool.query(`
+    SELECT f.id, f.email, f.unsubscribe_token, f.last_notified_at, f.target_value::bigint AS project_id
+      FROM civic.follows f
+     WHERE f.verified = TRUE AND f.target_type = 'project'
+  `);
+  let statusSent = 0;
+  for (const f of followRows.rows) {
+    const since = f.last_notified_at || new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    const events = await pool.query(`
+      SELECT h.id, h.status, h.observed_at, p.name
+        FROM civic.status_history h
+        JOIN civic.projects p ON p.id = h.project_id
+       WHERE h.project_id = $1
+         AND h.observed_at > $2
+         AND NOT EXISTS (
+           SELECT 1 FROM civic.status_alert_log al
+            WHERE al.follow_id = $3 AND al.status_history_id = h.id
+         )
+       ORDER BY h.observed_at ASC
+    `, [f.project_id, since, f.id]);
+    if (events.rows.length === 0) continue;
+
+    const unsub = `${BASE}/api/alerts/unsubscribe?token=${f.unsubscribe_token}`;
+    const projectName = events.rows[0].name;
+    const lines = events.rows.map((e) =>
+      `  ${e.observed_at.toString().slice(0, 10)}  →  ${e.status}`
+    ).join("\n");
+
+    const body =
+`Status update on ${projectName}:
+
+${lines}
+
+${BASE}/projects/${f.project_id}
+
+Unsubscribe: ${unsub}
+`;
+    if (resend) {
+      try {
+        await resend.emails.send({
+          from: FROM, to: f.email,
+          subject: `Update: ${projectName}`,
+          text: body,
+        });
+      } catch (e) {
+        console.error(`status email to ${f.email} failed:`, e);
+        continue;
+      }
+    } else {
+      console.log(`[dry-run] would send status update to ${f.email}:\n${body}\n`);
+    }
+    for (const e of events.rows) {
+      await pool.query(
+        `INSERT INTO civic.status_alert_log (follow_id, status_history_id) VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [f.id, e.id],
+      );
+      statusSent++;
+    }
+    await pool.query("UPDATE civic.follows SET last_notified_at = NOW() WHERE id = $1", [f.id]);
+  }
+  console.log(`status-change notifications: ${statusSent}.`);
   await pool.end();
 }
 
