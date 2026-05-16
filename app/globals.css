@@ -1,0 +1,37 @@
+@import "tailwindcss";
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+:root {
+  --bg: #0b0c0e;
+  --panel: #14161a;
+  --panel-2: #1c1f24;
+  --line: #262a31;
+  --ink: #e7ebef;
+  --ink-dim: #9aa3ad;
+  --accent: #ffd166;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--ink); }
+body {
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  font-feature-settings: "ss01", "cv11";
+}
+
+.font-mono { font-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace); }
+
+/* MapLibre tweaks to match the dark theme. */
+.maplibregl-popup-content {
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,.4);
+}
+.maplibregl-popup-tip { border-top-color: var(--panel) !important; border-bottom-color: var(--panel) !important; }
+.maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib a { color: var(--ink-dim) !important; background: rgba(20,22,26,.7) !important; }
+
+/* Scrollbar that doesn't fight the dark theme. */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
