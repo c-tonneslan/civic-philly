@@ -19,6 +19,10 @@ interface Props {
 const GEOCODER_URL =
   process.env.NEXT_PUBLIC_GEOCODER_URL || "https://nominatim.openstreetmap.org/search";
 
+// Philadelphia bounding box (left,top,right,bottom). Pinned tight so
+// "Market St" doesn't autocomplete to Market St in some other city.
+const PHILLY_VIEWBOX = "-75.2803,40.1379,-74.9558,39.8670";
+
 // Nominatim has a usage policy: 1 req/sec, real User-Agent. We debounce
 // to 350ms and only fire on input >= 4 chars.
 export default function AddressAutocomplete({
@@ -37,7 +41,7 @@ export default function AddressAutocomplete({
     }
     timer.current = setTimeout(async () => {
       const q = `${value}, Philadelphia, PA`;
-      const url = `${GEOCODER_URL}?format=json&limit=5&countrycodes=us&q=${encodeURIComponent(q)}`;
+      const url = `${GEOCODER_URL}?format=json&limit=5&countrycodes=us&viewbox=${PHILLY_VIEWBOX}&bounded=1&q=${encodeURIComponent(q)}`;
       try {
         const resp = await fetch(url, { headers: { "Accept-Language": "en" } });
         if (!resp.ok) return;

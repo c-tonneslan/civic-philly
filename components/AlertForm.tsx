@@ -8,6 +8,10 @@ import AddressAutocomplete from "./AddressAutocomplete";
 const GEOCODER_URL =
   process.env.NEXT_PUBLIC_GEOCODER_URL || "https://nominatim.openstreetmap.org/search";
 
+// Same Philadelphia bounds as AddressAutocomplete; keep the alert
+// signup geocoder from matching an address in some other city.
+const PHILLY_VIEWBOX = "-75.2803,40.1379,-74.9558,39.8670";
+
 export default function AlertForm() {
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
@@ -30,9 +34,10 @@ export default function AlertForm() {
     setBusy(true);
     try {
       const q = `${address}, Philadelphia, PA`;
-      const geo = await fetch(`${GEOCODER_URL}?format=json&limit=1&q=${encodeURIComponent(q)}`, {
-        headers: { "Accept-Language": "en" },
-      });
+      const geo = await fetch(
+        `${GEOCODER_URL}?format=json&limit=1&countrycodes=us&viewbox=${PHILLY_VIEWBOX}&bounded=1&q=${encodeURIComponent(q)}`,
+        { headers: { "Accept-Language": "en" } },
+      );
       const arr = await geo.json();
       const hit = arr?.[0];
       if (!hit) { setErr("Couldn't find that address."); return; }
