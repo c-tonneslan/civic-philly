@@ -13,16 +13,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: check secrets
+        id: secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$DATABASE_URL" ]; then
+            echo "has_db=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_db=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=civic-philly scrape skipped::DATABASE_URL secret not configured. Run 'gh secret set DATABASE_URL --repo c-tonneslan/civic-philly' to enable the scheduled scrape."
+          fi
       - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.has_db == 'true'
         with:
           node-version: "20"
           cache: "npm"
-      - run: npm ci
+      - if: steps.secrets.outputs.has_db == 'true'
+        run: npm ci
       - name: run all scrapers
+        if: steps.secrets.outputs.has_db == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SCRAPE_REQUIRE_DB: "true"
         run: npm run scrape:all
       - name: refresh demolition permits + violations + owners + transfers
+        if: steps.secrets.outputs.has_db == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
@@ -31,12 +47,14 @@ jobs:
           npm run load:owners
           npm run load:transfers
       - name: backfill developer + spatial joins for new rows
+        if: steps.secrets.outputs.has_db == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           npm run backfill:developers
           npm run backfill:spatial
       - name: send alerts
+        if: steps.secrets.outputs.has_db == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
@@ -50,10 +68,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: check secrets
+        id: secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$DATABASE_URL" ]; then
+            echo "has_db=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_db=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=civic-philly digest skipped::DATABASE_URL secret not configured."
+          fi
       - uses: actions/setup-node@v4
+        if: steps.secrets.outputs.has_db == 'true'
         with: { node-version: "20", cache: "npm" }
-      - run: npm ci
+      - if: steps.secrets.outputs.has_db == 'true'
+        run: npm ci
       - name: send weekly digests
+        if: steps.secrets.outputs.has_db == 'true'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
