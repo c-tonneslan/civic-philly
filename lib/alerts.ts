@@ -40,7 +40,8 @@ export async function createSubscription(input: {
        SET radius_meters = EXCLUDED.radius_meters,
            project_types = EXCLUDED.project_types,
            geom = EXCLUDED.geom,
-           verify_token = EXCLUDED.verify_token
+           verify_token = EXCLUDED.verify_token,
+           verified = FALSE
      RETURNING id, email, address_label, radius_meters, project_types,
                verified, verify_token, unsubscribe_token,
                ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lng,
