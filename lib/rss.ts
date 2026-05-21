@@ -11,6 +11,15 @@ function esc(s: string | null | undefined): string {
     .replace(/'/g, "&apos;");
 }
 
+// RSS 2.0 wants an RFC-822 date. Return null for a missing or unparseable
+// timestamp so the caller can drop the optional <pubDate> rather than emit
+// the literal string "Invalid Date", which breaks feed validators.
+function rfc822Date(value: unknown): string | null {
+  if (value == null) return null;
+  const d = new Date(value as string);
+  return Number.isNaN(d.getTime()) ? null : d.toUTCString();
+}
+
 export interface RssOptions {
   title: string;
   description: string;
@@ -23,7 +32,8 @@ export function projectsToRss(projects: Project[], opts: RssOptions): string {
   const now = new Date().toUTCString();
   const items = projects.map((p) => {
     const link = `${opts.baseUrl}/projects/${p.id}`;
-    const pubDate = new Date(p.first_seen_at).toUTCString();
+    const pubDate = rfc822Date(p.first_seen_at);
+    const pubDateLine = pubDate ? `\n      <pubDate>${pubDate}</pubDate>` : "";
     const typeLabel = TYPE_LABELS[p.project_type];
     const statusLabel = STATUS_LABELS[p.status];
     const summary = [
@@ -37,8 +47,7 @@ export function projectsToRss(projects: Project[], opts: RssOptions): string {
     return `    <item>
       <title>${esc(p.name)}</title>
       <link>${esc(link)}</link>
-      <guid isPermaLink="true">${esc(link)}</guid>
-      <pubDate>${pubDate}</pubDate>
+      <guid isPermaLink="true">${esc(link)}</guid>${pubDateLine}
       <description>${esc(summary)}</description>
       <category>${esc(typeLabel)}</category>
     </item>`;
