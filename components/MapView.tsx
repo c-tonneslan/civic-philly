@@ -5,6 +5,7 @@ import maplibregl, { type Map as MapLibreMap, type GeoJSONSource } from "maplibr
 import type { MapProject } from "@/lib/projects";
 import type { ProjectFilters, ProjectType } from "@/lib/types";
 import { TYPE_COLORS, TYPE_LABELS, STATUS_LABELS } from "@/lib/types";
+import { formatYMD } from "@/lib/dates";
 
 interface Props {
   points: MapProject[];
@@ -200,7 +201,7 @@ export default function MapView({ points, filters }: Props) {
         const coords = (f.geometry as unknown as { coordinates: [number, number] }).coordinates;
         new maplibregl.Popup({ closeButton: true, offset: 8 })
           .setLngLat(coords)
-          .setHTML(`<div class="text-xs"><div class="uppercase tracking-wider opacity-60 text-[10px]">Demolition permit</div><div class="mt-1">${f.properties?.event_date || ""}</div></div>`)
+          .setHTML(`<div class="text-xs"><div class="uppercase tracking-wider opacity-60 text-[10px]">Demolition permit</div><div class="mt-1">${formatYMD(f.properties?.event_date) || ""}</div></div>`)
           .addTo(map);
       });
 
