@@ -10,6 +10,7 @@ import {
 import { getOwnerByParcel } from "@/lib/owners";
 import { getTransfersAtAddress, getTransfersWithin } from "@/lib/transfers";
 import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
+import { formatYMD } from "@/lib/dates";
 import MiniMap from "@/components/MiniMap";
 import StatusTimeline from "@/components/StatusTimeline";
 
@@ -85,9 +86,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           <Field label="Funding amount" value={project.funding_amount != null ? `$${Number(project.funding_amount).toLocaleString()}` : null} />
           <Field label="Total units" value={project.units_total != null && project.units_total > 0 ? String(project.units_total) : null} />
           <Field label="Affordable units" value={project.units_affordable != null && project.units_affordable > 0 ? String(project.units_affordable) : null} />
-          <Field label="Approved" value={project.approved_date} />
-          <Field label="Start date" value={project.start_date} />
-          <Field label="Completion" value={project.completion_date} />
+          <Field label="Approved" value={formatYMD(project.approved_date)} />
+          <Field label="Start date" value={formatYMD(project.start_date)} />
+          <Field label="Completion" value={formatYMD(project.completion_date)} />
           <Field label="First seen in feed" value={project.first_seen_at ? new Date(project.first_seen_at).toLocaleDateString() : null} />
         </dl>
 
@@ -208,7 +209,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
               {demolitions.slice(0, 12).map((d) => (
                 <div key={d.id} className="flex justify-between gap-3">
                   <span className="text-[var(--ink)] truncate">{d.address || "—"}</span>
-                  <span className="text-[var(--ink-dim)] whitespace-nowrap">{d.event_date}</span>
+                  <span className="text-[var(--ink-dim)] whitespace-nowrap">{formatYMD(d.event_date)}</span>
                 </div>
               ))}
             </div>
@@ -229,7 +230,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                   <div className="flex justify-between gap-3 flex-wrap">
                     <div>
                       <div className="text-[10px] uppercase tracking-wider text-[var(--ink-dim)] mb-0.5">
-                        {t.document_type} · {t.transfer_date}
+                        {t.document_type} · {formatYMD(t.transfer_date)}
                       </div>
                       <div className="text-[var(--ink)]">
                         {t.grantor || "—"} <span className="text-[var(--ink-dim)]">→</span> {t.grantee || "—"}
@@ -265,7 +266,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
                       </div>
                     </div>
                     <div className="text-right whitespace-nowrap">
-                      <div className="text-[var(--ink)]">{t.transfer_date}</div>
+                      <div className="text-[var(--ink)]">{formatYMD(t.transfer_date)}</div>
                       {t.consideration != null && (
                         <div className="text-[var(--ink-dim)]">${t.consideration.toLocaleString()}</div>
                       )}
