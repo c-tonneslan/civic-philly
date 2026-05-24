@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition, useState } from "react";
+import { useEffect, useTransition, useState } from "react";
 import type { Project, ProjectFilters, ProjectStatus, ProjectType } from "@/lib/types";
 import {
   PROJECT_STATUSES, PROJECT_TYPES,
@@ -243,6 +243,10 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [draft, setDraft] = useState(value);
+  // Reset clears `value` to "" externally, but useState only takes its
+  // initial value once, so the input would still show the old query.
+  // Pull draft back in line whenever value actually changes from outside.
+  useEffect(() => { setDraft(value); }, [value]);
   // Don't fire on every keystroke; commit on enter or blur.
   return (
     <div>
