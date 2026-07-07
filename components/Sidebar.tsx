@@ -11,6 +11,7 @@ import {
 import NearMe from "./NearMe";
 import { copyViewKeysInto } from "@/lib/useMapUrlState";
 import { useRowState, setHovered } from "@/lib/mapSelection";
+import { buildQuery } from "@/lib/queryString";
 
 interface Props {
   projects: Project[];
@@ -19,29 +20,11 @@ interface Props {
   fundingSources: string[];
   activeFilters: ProjectFilters;
   initialQuery: { [k: string]: string | string[] | undefined };
+  aiEnabled?: boolean;
 }
 
-function buildQuery(filters: ProjectFilters): string {
-  const sp = new URLSearchParams();
-  filters.types?.forEach((t) => sp.append("type", t));
-  filters.statuses?.forEach((s) => sp.append("status", s));
-  if (filters.neighborhood) sp.set("neighborhood", filters.neighborhood);
-  if (filters.fundingSource) sp.set("funding", filters.fundingSource);
-  if (filters.districtId) sp.set("district", String(filters.districtId));
-  if (filters.developer) sp.set("developer", filters.developer);
-  if (filters.q) sp.set("q", filters.q);
-  if (filters.startYear) sp.set("startYear", String(filters.startYear));
-  if (filters.endYear) sp.set("endYear", String(filters.endYear));
-  if (filters.near) {
-    sp.set("lat", String(filters.near.lat));
-    sp.set("lng", String(filters.near.lng));
-    sp.set("radius", String(filters.near.radiusMeters));
-  }
-  const s = sp.toString();
-  return s ? `?${s}` : "";
-}
 
-export default function Sidebar({ projects, totalCount, neighborhoods, fundingSources, activeFilters }: Props) {
+export default function Sidebar({ projects, totalCount, neighborhoods, fundingSources, activeFilters, aiEnabled }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [filters, setFilters] = useState<ProjectFilters>(activeFilters);
@@ -60,6 +43,15 @@ export default function Sidebar({ projects, totalCount, neighborhoods, fundingSo
     // map view keys (camera/overlay/layers/selection) across the navigation —
     // otherwise every filter change would wipe the shared view.
     const sp = new URLSearchParams(buildQuery(next).replace(/^\?/, ""));
+    copyViewKeysInto(sp);
+    const qs = sp.toString();
+    startTransition(() => { router.push(`/${qs ? `?${qs}` : ""}`, { scroll: false }); });
+  }
+
+  // Apply a raw filter query string (from the NL /api/ask route) through the same
+  // view-key-preserving navigation as update().
+  function applyQueryString(query: string) {
+    const sp = new URLSearchParams(query.replace(/^\?/, ""));
     copyViewKeysInto(sp);
     const qs = sp.toString();
     startTransition(() => { router.push(`/${qs ? `?${qs}` : ""}`, { scroll: false }); });
@@ -86,7 +78,12 @@ export default function Sidebar({ projects, totalCount, neighborhoods, fundingSo
     // reachable on short screens. Desktop keeps the fixed-filters / scrolling-list split.
     <div className="flex flex-col h-full overflow-y-auto md:overflow-hidden">
       <div className="px-5 py-4 border-b border-[var(--line)] space-y-4">
-        <SearchBox value={filters.q ?? ""} onChange={(q) => update({ q: q || undefined })} />
+        <SearchBox
+          value={filters.q ?? ""}
+          onChange={(q) => update({ q: q || undefined })}
+          aiEnabled={aiEnabled}
+          onAiQuery={applyQueryString}
+        />
         <NearMe
           active={filters.near}
           onApply={(near) => update({ near })}
@@ -281,25 +278,68 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
   return <div className="text-[10px] uppercase tracking-wider text-[var(--ink-dim)] mb-1.5">{children}</div>;
 }
 
-function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function SearchBox({
+  value, onChange, aiEnabled, onAiQuery,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  aiEnabled?: boolean;
+  onAiQuery?: (query: string) => void;
+}) {
   const [draft, setDraft] = useState(value);
+  const [pending, setPending] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const inFlight = useRef(false);
   // Reset clears `value` to "" externally, but useState only takes its
   // initial value once, so the input would still show the old query.
   // Pull draft back in line whenever value actually changes from outside.
   useEffect(() => { setDraft(value); }, [value]);
-  // Don't fire on every keystroke; commit on enter or blur.
+
+  async function ask(text: string) {
+    if (inFlight.current) return; // guard against a double-fire clobbering the URL
+    inFlight.current = true;
+    setPending(true);
+    setNote(null);
+    try {
+      const resp = await fetch("/api/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ q: text }),
+      });
+      if (!resp.ok) { onChange(text); return; } // e.g. 501 not configured -> plain search
+      const j = await resp.json();
+      if (j.fallback) setNote("Searched the text instead.");
+      onAiQuery?.(j.query ?? "");
+    } catch {
+      onChange(text); // network error -> plain search
+    } finally {
+      setPending(false);
+      inFlight.current = false;
+    }
+  }
+
+  function submit() {
+    const text = draft.trim();
+    if (!text) { onChange(""); return; }
+    if (aiEnabled && onAiQuery) ask(text);
+    else onChange(text);
+  }
+
   return (
     <div>
-      <FieldLabel>Search</FieldLabel>
+      <FieldLabel>{aiEnabled ? "Ask" : "Search"}</FieldLabel>
       <input
         type="search"
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") onChange(draft.trim()); }}
-        onBlur={() => { if (draft.trim() !== value) onChange(draft.trim()); }}
-        placeholder="name, address, developer..."
+        onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+        // Only commit on blur in plain mode — in AI mode that would double-fire the ask.
+        onBlur={() => { if (!aiEnabled && draft.trim() !== value) onChange(draft.trim()); }}
+        placeholder={aiEnabled ? "e.g. stalled housing in Kensington since 2020" : "name, address, developer..."}
         className="w-full bg-[var(--panel-2)] border border-[var(--line)] rounded px-2 py-1.5 text-xs"
       />
+      {pending && <div className="mt-1 text-[10px] text-[var(--ink-dim)]">Thinking…</div>}
+      {note && !pending && <div className="mt-1 text-[10px] text-[var(--ink-dim)]">{note}</div>}
     </div>
   );
 }

@@ -57,6 +57,7 @@ export default async function Home({
         <Sidebar
           projects={projects}
           totalCount={totalCount}
+          aiEnabled={!!process.env.GROQ_API_KEY}
           neighborhoods={neighborhoods}
           fundingSources={fundingSources}
           activeFilters={filters}
