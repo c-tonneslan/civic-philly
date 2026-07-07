@@ -6,10 +6,13 @@ import type { MapProject } from "@/lib/projects";
 import type { ProjectFilters, ProjectType } from "@/lib/types";
 import { TYPE_COLORS, TYPE_LABELS, STATUS_LABELS } from "@/lib/types";
 import { formatYMD } from "@/lib/dates";
+import { OVERLAY_OPTIONS, overlayMeta, DEFAULT_VIEW, type OverlayId, type ViewState } from "@/lib/mapViewParams";
+import { writeViewNow, useViewWriter, usePopstateView } from "@/lib/useMapUrlState";
 
 interface Props {
   points: MapProject[];
   filters: ProjectFilters;
+  initialView?: ViewState;
 }
 
 const PHL_CENTER: [number, number] = [-75.1652, 39.9526];
@@ -23,20 +26,6 @@ const STYLE_URL = process.env.NEXT_PUBLIC_MAP_STYLE_URL || "https://tiles.openfr
 // purple/green). The old ramp's top color was identical to the transit dot.
 const CHORO = { lo: "#0a2e33", mid: "#0e7490", hi: "#38e0d0" };
 
-const OVERLAY_OPTIONS = [
-  { id: "none",          label: "None" },
-  { id: "rent_burdened", label: "Rent burdened", scale: "pct" },
-  { id: "renter",        label: "Renter occupied", scale: "pct" },
-  { id: "income",        label: "Median income", scale: "income" },
-  { id: "black",         label: "Black population", scale: "pct" },
-  { id: "white",         label: "White population", scale: "pct" },
-  { id: "hispanic",      label: "Hispanic population", scale: "pct" },
-] as const;
-type OverlayId = (typeof OVERLAY_OPTIONS)[number]["id"];
-
-function overlayMeta(id: OverlayId) {
-  return OVERLAY_OPTIONS.find((o) => o.id === id) ?? OVERLAY_OPTIONS[0];
-}
 function formatMetric(id: OverlayId, v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
   const scale = (overlayMeta(id) as { scale?: string }).scale;
@@ -45,18 +34,31 @@ function formatMetric(id: OverlayId, v: number | null | undefined): string {
   return String(v);
 }
 
-export default function MapView({ points, filters }: Props) {
+export default function MapView({ points, filters, initialView = DEFAULT_VIEW }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [overlay, setOverlay] = useState<OverlayId>("none");
+  // Seed every view slice from the server-parsed URL so the controls/legend
+  // render correct on first paint (no flash, no hydration mismatch).
+  const [overlay, setOverlay] = useState<OverlayId>(initialView.overlay);
   const [ramp, setRamp] = useState<{ lo: number; hi: number } | null>(null);
-  const [showDemolitions, setShowDemolitions] = useState(false);
-  const [showViolations, setShowViolations] = useState(false);
-  // The tract click handler is bound once on map load, so it can't close over
-  // the latest `overlay`. Mirror it into a ref the handler reads at click time.
-  const overlayRef = useRef<OverlayId>("none");
+  const [showDemolitions, setShowDemolitions] = useState(initialView.showDemolitions);
+  const [showViolations, setShowViolations] = useState(initialView.showViolations);
+  const [selectedId, setSelectedId] = useState<number | null>(initialView.selected);
+
+  // Mirror latest state into refs so the once-bound map handlers read current
+  // values, and so the debounced moveend writer never uses stale slices.
+  const overlayRef = useRef<OverlayId>(initialView.overlay);
   overlayRef.current = overlay;
+  const selRef = useRef<number | null>(initialView.selected);
+  selRef.current = selectedId;
+  // An explicit shared camera (`c` in the URL) must win over the Near-Me flyTo
+  // on first load; consumed once.
+  const hadInitialCamera = useRef<boolean>(!!initialView.center);
+  // Suppress the camera writer while we programmatically move the map (initial
+  // selection easeTo, popstate reconcile) so it doesn't echo back into the URL.
+  const suppressWrite = useRef(false);
+  const writeCamera = useViewWriter();
 
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
@@ -65,8 +67,10 @@ export default function MapView({ points, filters }: Props) {
       map = new maplibregl.Map({
         container: containerRef.current,
         style: STYLE_URL,
-        center: PHL_CENTER,
-        zoom: 11.5,
+        // Construct AT the shared camera — no post-init flyTo, so no synthetic
+        // moveend to echo back into the URL.
+        center: initialView.center ?? PHL_CENTER,
+        zoom: initialView.zoom ?? 11.5,
         attributionControl: { compact: true },
       });
     } catch (e) {
@@ -84,6 +88,14 @@ export default function MapView({ points, filters }: Props) {
     setTimeout(forceResize, 200);
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "imperial" }), "bottom-left");
+
+    // Persist the camera into the URL when it settles (debounced, replaceState),
+    // so panning/zooming makes the view shareable without a server round-trip or
+    // a Back-button entry per frame. Skipped while we move the map ourselves.
+    map.on("moveend", () => {
+      if (suppressWrite.current) return;
+      writeCamera({ center: map.getCenter().toArray() as [number, number], zoom: map.getZoom() });
+    });
 
     map.on("load", () => {
       // Choropleth source (empty until user picks a metric).
@@ -185,11 +197,12 @@ export default function MapView({ points, filters }: Props) {
         map.easeTo({ center: geom.coordinates, zoom });
       });
 
-      map.on("click", "unclustered", (e) => {
-        const f = e.features?.[0];
-        if (!f) return;
-        const props = f.properties as { id: number; name: string; project_type: ProjectType; status: string };
-        const coords = (f.geometry as unknown as { coordinates: [number, number] }).coordinates;
+      // Shared opener so a click and a shared `sel=` link render the same popup
+      // and keep `selectedId` (hence the URL) in sync.
+      const openProjectPopup = (
+        coords: [number, number],
+        props: { id: number; name: string; project_type: ProjectType; status: string },
+      ) => {
         const label = TYPE_LABELS[props.project_type] || "Project";
         const status = STATUS_LABELS[props.status as keyof typeof STATUS_LABELS] || props.status;
         const html = `
@@ -198,9 +211,39 @@ export default function MapView({ points, filters }: Props) {
             <div class="font-medium mt-1 mb-2">${escapeHtml(props.name)}</div>
             <a href="/projects/${props.id}" class="text-xs underline underline-offset-2 hover:opacity-80">Open details &rarr;</a>
           </div>`;
-        new maplibregl.Popup({ closeButton: true, offset: 14 })
+        const popup = new maplibregl.Popup({ closeButton: true, offset: 14 })
           .setLngLat(coords).setHTML(html).addTo(map);
+        setSelectedId(props.id);
+        popup.on("close", () => {
+          // Only clear if this popup is still the selected one (a new click
+          // already updated selectedId before this close fires).
+          if (selRef.current === props.id) setSelectedId(null);
+        });
+      };
+
+      map.on("click", "unclustered", (e) => {
+        const f = e.features?.[0];
+        if (!f) return;
+        const props = f.properties as { id: number; name: string; project_type: ProjectType; status: string };
+        const coords = (f.geometry as unknown as { coordinates: [number, number] }).coordinates;
+        openProjectPopup(coords, props);
       });
+
+      // A shared `sel=` link: open the same popup for that project once points
+      // are present, and ease to it only if the URL didn't also pin a camera.
+      if (initialView.selected != null) {
+        const hit = points.find((p) => p.id === initialView.selected);
+        if (hit) {
+          openProjectPopup([hit.lng, hit.lat], {
+            id: hit.id, name: hit.name, project_type: hit.project_type, status: hit.status,
+          });
+          if (!initialView.center) {
+            suppressWrite.current = true;
+            map.easeTo({ center: [hit.lng, hit.lat], zoom: Math.max(map.getZoom(), 15) });
+            map.once("moveend", () => { suppressWrite.current = false; });
+          }
+        }
+      }
 
       // Tract popup: name the active metric and format its value ($ vs %).
       map.on("click", "tracts-fill", (e) => {
@@ -341,12 +384,55 @@ export default function MapView({ points, filters }: Props) {
     else map.once("load", apply);
   }, [showViolations]);
 
-  // If we have a `near` filter, fly there.
+  // If we have a `near` filter, fly there — but let an explicit shared camera
+  // (`c` in the URL) win on the very first load.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !filters.near) return;
+    if (hadInitialCamera.current) { hadInitialCamera.current = false; return; }
     map.flyTo({ center: [filters.near.lng, filters.near.lat], zoom: 14 });
   }, [filters.near?.lat, filters.near?.lng]);
+
+  // Mirror discrete view slices into the URL. Skip the first run of each so we
+  // don't rewrite the URL with the values we just seeded from it.
+  const seededOverlay = useRef(false);
+  useEffect(() => {
+    if (!seededOverlay.current) { seededOverlay.current = true; return; }
+    writeViewNow({ overlay });
+  }, [overlay]);
+  const seededDemo = useRef(false);
+  useEffect(() => {
+    if (!seededDemo.current) { seededDemo.current = true; return; }
+    writeViewNow({ showDemolitions });
+  }, [showDemolitions]);
+  const seededViol = useRef(false);
+  useEffect(() => {
+    if (!seededViol.current) { seededViol.current = true; return; }
+    writeViewNow({ showViolations });
+  }, [showViolations]);
+  const seededSel = useRef(false);
+  useEffect(() => {
+    if (!seededSel.current) { seededSel.current = true; return; }
+    writeViewNow({ selected: selectedId });
+  }, [selectedId]);
+
+  // Back/Forward reconcile: MapView seeds view-state once, so a history entry
+  // with different view keys would desync the map from the URL. Re-parse on
+  // popstate and jump the map/controls to match, suppressing the echo write.
+  usePopstateView((v) => {
+    const map = mapRef.current;
+    setOverlay(v.overlay);
+    setShowDemolitions(v.showDemolitions);
+    setShowViolations(v.showViolations);
+    setSelectedId(v.selected);
+    if (map && v.center && v.zoom != null) {
+      suppressWrite.current = true;
+      map.jumpTo({ center: v.center, zoom: v.zoom });
+      // jumpTo fires moveend synchronously-ish; clear on the next tick.
+      map.once("moveend", () => { suppressWrite.current = false; });
+      setTimeout(() => { suppressWrite.current = false; }, 350);
+    }
+  });
 
   return (
     <>
@@ -396,7 +482,38 @@ function Overlays({
         <input type="checkbox" checked={showViolations} onChange={(e) => setShowViolations(e.target.checked)} />
         <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: "var(--warn)" }} />Housing-code violations (1y)</span>
       </label>
+      <ShareButton />
     </div>
+  );
+}
+
+function ShareButton() {
+  const [copied, setCopied] = useState(false);
+  const share = async () => {
+    // The URL is already complete: filters live in location.search (router) and
+    // view-state is continuously synced there via replaceState.
+    const url = window.location.href;
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch {
+      // Insecure-context fallback.
+      const ta = document.createElement("textarea");
+      ta.value = url; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); } catch { /* give up quietly */ }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <button
+      type="button"
+      onClick={share}
+      className="w-full mt-1 rounded border border-[var(--line)] px-2 py-1.5 text-xs hover:border-[var(--accent)] hover:text-[var(--ink)] transition-colors"
+    >
+      {copied ? "Copied link ✓" : "Share this view"}
+    </button>
   );
 }
 

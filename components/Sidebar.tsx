@@ -9,6 +9,7 @@ import {
   STATUS_LABELS, TYPE_COLORS, TYPE_LABELS,
 } from "@/lib/types";
 import NearMe from "./NearMe";
+import { copyViewKeysInto } from "@/lib/useMapUrlState";
 
 interface Props {
   projects: Project[];
@@ -54,7 +55,13 @@ export default function Sidebar({ projects, totalCount, neighborhoods, fundingSo
   function update(patch: Partial<ProjectFilters>) {
     const next = { ...filters, ...patch };
     setFilters(next);
-    startTransition(() => { router.push(`/${buildQuery(next)}`, { scroll: false }); });
+    // buildQuery rebuilds the query from filters alone, so carry the current
+    // map view keys (camera/overlay/layers/selection) across the navigation —
+    // otherwise every filter change would wipe the shared view.
+    const sp = new URLSearchParams(buildQuery(next).replace(/^\?/, ""));
+    copyViewKeysInto(sp);
+    const qs = sp.toString();
+    startTransition(() => { router.push(`/${qs ? `?${qs}` : ""}`, { scroll: false }); });
   }
 
   function toggleType(t: ProjectType) {
@@ -196,7 +203,16 @@ export default function Sidebar({ projects, totalCount, neighborhoods, fundingSo
               export CSV
             </a>
             <button
-              onClick={() => { setFilters({}); startTransition(() => router.push("/")); }}
+              onClick={() => {
+                setFilters({});
+                // Clear filters but keep the map where it is (camera/overlay/
+                // layers); drop the selected pin since its project may be gone.
+                const sp = new URLSearchParams();
+                copyViewKeysInto(sp);
+                sp.delete("sel");
+                const qs = sp.toString();
+                startTransition(() => router.push(`/${qs ? `?${qs}` : ""}`, { scroll: false }));
+              }}
               className="text-[11px] text-[var(--ink-dim)] hover:text-[var(--ink)] underline-offset-2 hover:underline"
             >
               reset

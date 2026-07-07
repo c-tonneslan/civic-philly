@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { listMapProjects, listNeighborhoods, listFundingSources, listProjects, countProjects } from "@/lib/projects";
 import { parseFiltersFromSearchParams } from "@/lib/filterParams";
+import { parseViewParams } from "@/lib/mapViewParams";
 import Sidebar from "@/components/Sidebar";
 import MapView from "@/components/MapView";
 import MobileShell from "@/components/MobileShell";
@@ -26,7 +27,12 @@ export default async function Home({
   searchParams: Promise<SP>;
 }) {
   const sp = await searchParams;
-  const filters = parseFiltersFromSearchParams(toUrlSearchParams(sp));
+  const urlParams = toUrlSearchParams(sp);
+  const filters = parseFiltersFromSearchParams(urlParams);
+  // View-state (camera/overlay/layers/selection) is parsed here too so the map
+  // hydrates at the shared camera and the overlay <select>/Legend render correct
+  // on first paint. These keys are NOT fed into the data queries below.
+  const initialView = parseViewParams(urlParams);
 
   const [points, projects, totalCount, neighborhoods, fundingSources] = await Promise.all([
     listMapProjects(filters).catch(() => []),
@@ -63,7 +69,7 @@ export default async function Home({
   return (
     <div className="w-screen overflow-hidden" style={{ height: "calc(100dvh - var(--nav-h))" }}>
       <MobileShell sidebar={sidebar}>
-        <MapView points={points} filters={filters} />
+        <MapView points={points} filters={filters} initialView={initialView} />
       </MobileShell>
     </div>
   );
