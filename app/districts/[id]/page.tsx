@@ -6,6 +6,8 @@ import { listProjects } from "@/lib/projects";
 import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
 import TimeSeriesChart from "@/components/TimeSeriesChart";
 import FollowButton from "@/components/FollowButton";
+import { getDeliveryCohorts } from "@/lib/scorecard";
+import DeliveryBar, { DeliveryLegend } from "@/components/DeliveryBar";
 
 export const dynamic = "force-dynamic";
 
@@ -22,11 +24,12 @@ export default async function DistrictPage({ params }: { params: Promise<{ id: s
   const districtId = parseInt(id, 10);
   if (!Number.isFinite(districtId)) notFound();
 
-  const [district, official, projects, series] = await Promise.all([
+  const [district, official, projects, series, cohorts] = await Promise.all([
     getDistrict(districtId),
     getDistrictOfficial(districtId),
     listProjects({ districtId }, 50, 0).catch(() => []),
     getDistrictTimeSeries(districtId).catch(() => []),
+    getDeliveryCohorts(districtId).catch(() => []),
   ]);
   if (!district) notFound();
 
@@ -96,6 +99,23 @@ export default async function DistrictPage({ params }: { params: Promise<{ id: s
             <TimeSeriesChart buckets={series} />
           </div>
         </section>
+
+        {cohorts.length > 0 && (
+          <section className="mt-10">
+            <div className="flex items-end justify-between mb-3">
+              <h2 className="text-lg font-medium">Delivery by vintage</h2>
+              <Link href="/scorecard" className="text-xs text-[var(--ink-dim)] hover:text-[var(--ink)] underline-offset-2 hover:underline">
+                citywide scorecard &rarr;
+              </Link>
+            </div>
+            <div className="border border-[var(--line)] rounded-lg p-5 bg-[var(--panel)] space-y-4">
+              <DeliveryLegend />
+              {[...cohorts].sort((a, b) => b.vintage - a.vintage).map((row) => (
+                <DeliveryBar key={row.vintage} row={row} />
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="mt-10">
           <div className="flex items-end justify-between mb-3">
