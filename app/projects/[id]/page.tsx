@@ -13,6 +13,7 @@ import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
 import { formatYMD } from "@/lib/dates";
 import MiniMap from "@/components/MiniMap";
 import StatusTimeline from "@/components/StatusTimeline";
+import FollowButton from "@/components/FollowButton";
 
 export const dynamic = "force-dynamic";
 
@@ -68,8 +69,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ id: st
           </span>
         </div>
 
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight leading-tight">{project.name}</h1>
-        {project.address && <p className="mt-2 text-[var(--ink-dim)]">{project.address}</p>}
+        <div className="mt-2 flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight leading-tight">{project.name}</h1>
+            {project.address && <p className="mt-2 text-[var(--ink-dim)]">{project.address}</p>}
+          </div>
+          <FollowButton targetType="project" targetValue={String(project.id)} label={project.name} />
+        </div>
 
         {project.description && (
           <p className="mt-6 text-[15px] leading-relaxed text-[var(--ink)]/90">{project.description}</p>

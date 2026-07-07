@@ -6,7 +6,7 @@ export default function Confirmed() {
       <div className="max-w-md text-center">
         <h1 className="text-2xl font-semibold tracking-tight">You're in.</h1>
         <p className="mt-3 text-[var(--ink-dim)]">
-          We'll email you when new projects show up near your address. You can unsubscribe from any alert.
+          We'll email you when there's something new to report. You can unsubscribe from any email.
         </p>
         <Link href="/" className="inline-block mt-6 px-4 py-2 text-sm rounded bg-[var(--ink)] text-[var(--bg)]">
           Back to map

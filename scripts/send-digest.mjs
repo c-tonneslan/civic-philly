@@ -84,33 +84,86 @@ async function buildDigestForDistrict(districtId, sinceIso) {
   return lines.join("\n");
 }
 
+async function buildDigestForDeveloper(developerName, sinceIso) {
+  const newProjects = await pool.query(`
+    SELECT id, name, project_type, status, address
+      FROM civic.projects
+     WHERE developer = $1
+       AND first_seen_at > $2
+     ORDER BY first_seen_at DESC
+     LIMIT 30
+  `, [developerName, sinceIso]);
+
+  const statusChanges = await pool.query(`
+    SELECT p.id, p.name, p.project_type, h.status, h.observed_at
+      FROM civic.status_history h
+      JOIN civic.projects p ON p.id = h.project_id
+     WHERE p.developer = $1
+       AND h.observed_at > $2
+       AND h.status NOT IN ('unknown')
+     ORDER BY h.observed_at DESC
+     LIMIT 30
+  `, [developerName, sinceIso]);
+
+  if (newProjects.rows.length === 0 && statusChanges.rows.length === 0) return null;
+
+  const lines = [];
+  lines.push(`What changed for ${developerName} this week`);
+  lines.push("");
+  if (newProjects.rows.length) {
+    lines.push(`${newProjects.rows.length} new project${newProjects.rows.length === 1 ? "" : "s"}:`);
+    for (const p of newProjects.rows.slice(0, 8)) {
+      lines.push(`  - [${p.project_type}] ${p.name}${p.address ? ` (${p.address})` : ""}`);
+      lines.push(`      ${BASE}/projects/${p.id}`);
+    }
+    if (newProjects.rows.length > 8) lines.push(`  ...and ${newProjects.rows.length - 8} more`);
+    lines.push("");
+  }
+  if (statusChanges.rows.length) {
+    lines.push(`${statusChanges.rows.length} status change${statusChanges.rows.length === 1 ? "" : "s"}:`);
+    for (const s of statusChanges.rows.slice(0, 8)) {
+      lines.push(`  - ${s.name} → ${s.status}`);
+    }
+    if (statusChanges.rows.length > 8) lines.push(`  ...and ${statusChanges.rows.length - 8} more`);
+    lines.push("");
+  }
+  lines.push(`Developer page: ${BASE}/developers/${encodeURIComponent(developerName)}`);
+  return lines.join("\n");
+}
+
 async function main() {
   const since = new Date();
   since.setDate(since.getDate() - 7);
   const sinceIso = since.toISOString();
 
   const follows = await pool.query(`
-    SELECT id, email, unsubscribe_token, target_value
+    SELECT id, email, unsubscribe_token, target_value, target_type
       FROM civic.follows
-     WHERE verified = TRUE AND target_type = 'district'
+     WHERE verified = TRUE AND target_type IN ('district', 'developer')
   `);
-  console.log(`found ${follows.rows.length} district followers`);
+  console.log(`found ${follows.rows.length} district/developer followers`);
 
+  // NOTE: project follows are delivered in real time by send-alerts.mjs (deduped
+  // via status_alert_log) — deliberately NOT handled here, to avoid double-notify.
   let totalSent = 0;
   for (const f of follows.rows) {
-    const districtId = parseInt(f.target_value, 10);
-    if (!Number.isFinite(districtId)) continue;
-    const body = await buildDigestForDistrict(districtId, sinceIso);
+    let body;
+    let subject;
+    if (f.target_type === "district") {
+      const districtId = parseInt(f.target_value, 10);
+      if (!Number.isFinite(districtId)) continue;
+      body = await buildDigestForDistrict(districtId, sinceIso);
+      subject = `civic-philly weekly: District ${districtId}`;
+    } else {
+      body = await buildDigestForDeveloper(f.target_value, sinceIso);
+      subject = `civic-philly weekly: ${f.target_value}`;
+    }
     if (!body) continue;
 
     const text = body + `\n\nUnsubscribe: ${BASE}/api/alerts/unsubscribe?token=${f.unsubscribe_token}\n`;
     if (resend) {
       try {
-        await resend.emails.send({
-          from: FROM, to: f.email,
-          subject: `civic-philly weekly: District ${districtId}`,
-          text,
-        });
+        await resend.emails.send({ from: FROM, to: f.email, subject, text });
         totalSent++;
       } catch (e) {
         console.error(`digest to ${f.email} failed:`, e);

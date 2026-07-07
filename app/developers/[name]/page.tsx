@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { getDeveloper } from "@/lib/developers";
 import { listProjects } from "@/lib/projects";
 import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
+import FollowButton from "@/components/FollowButton";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,8 @@ export default async function DeveloperPage({ params }: { params: Promise<{ name
 
         <div className="mt-4 flex items-end justify-between flex-wrap gap-3">
           <h1 className="text-3xl font-semibold tracking-tight">{decoded}</h1>
-          <div className="flex gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs">
+            <FollowButton targetType="developer" targetValue={decoded} label={decoded} />
             <Link href={mapUrl} className="px-3 py-1.5 rounded border border-[var(--line)] hover:bg-[var(--panel-2)]">View on map &rarr;</Link>
             <a href={csvUrl} className="px-3 py-1.5 rounded border border-[var(--line)] hover:bg-[var(--panel-2)]">Export CSV</a>
           </div>

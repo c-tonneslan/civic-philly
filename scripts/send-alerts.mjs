@@ -103,6 +103,9 @@ Unsubscribe: ${unsub}
     SELECT f.id, f.email, f.unsubscribe_token, f.last_notified_at, f.target_value::bigint AS project_id
       FROM civic.follows f
      WHERE f.verified = TRUE AND f.target_type = 'project'
+       -- Defense-in-depth: never let a malformed target_value reach ::bigint and
+       -- take down status emails for every follower (the API also enforces this).
+       AND f.target_value ~ '^[0-9]+$'
   `);
   let statusSent = 0;
   for (const f of followRows.rows) {

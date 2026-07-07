@@ -5,6 +5,7 @@ import { getDistrict, getDistrictOfficial, getDistrictTimeSeries } from "@/lib/c
 import { listProjects } from "@/lib/projects";
 import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
 import TimeSeriesChart from "@/components/TimeSeriesChart";
+import FollowButton from "@/components/FollowButton";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,8 @@ export default async function DistrictPage({ params }: { params: Promise<{ id: s
               </p>
             )}
           </div>
-          <div className="flex gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs">
+            <FollowButton targetType="district" targetValue={String(districtId)} label={`District ${districtId}`} />
             <Link href={mapUrl} className="px-3 py-1.5 rounded border border-[var(--line)] hover:bg-[var(--panel-2)]">
               View on map &rarr;
             </Link>
