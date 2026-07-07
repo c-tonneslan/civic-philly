@@ -11,6 +11,7 @@
 
 export const OVERLAY_OPTIONS = [
   { id: "none",          label: "None" },
+  { id: "displacement_pressure", label: "Displacement pressure", scale: "index" },
   { id: "rent_burdened", label: "Rent burdened", scale: "pct" },
   { id: "renter",        label: "Renter occupied", scale: "pct" },
   { id: "income",        label: "Median income", scale: "income" },

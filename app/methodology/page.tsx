@@ -145,6 +145,32 @@ export default function MethodologyPage() {
           </p>
         </Section>
 
+        <Section title="Displacement pressure index">
+          <p>
+            The <Link href="/displacement" className="underline">displacement pressure index</Link> (DPI)
+            scores each census tract 0–100 by combining four signals, each converted to a citywide
+            percentile and then averaged (equal weight; renormalized when a component is missing).
+            Because every component is a percentile, DPI is a <strong>relative</strong> ranking of
+            tracts against each other, not an absolute measurement.
+          </p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li><strong>Violation density</strong> — housing-code violations in the last ~1 year, per 1,000 residents.</li>
+            <li><strong>Demolition rate</strong> — demolition permits in the last 3 years, per 1,000 residents.</li>
+            <li><strong>Speculative flips</strong> — addresses sold two or more times within ~18 months, per 1,000 residents. Sheriff&apos;s-sale deeds are excluded (distress, not speculation).</li>
+            <li><strong>Rent burden</strong> — the ACS share of renter households paying 30%+ of income on rent.</li>
+          </ul>
+          <p>
+            Honest limits: the event windows are bounded by what the loaders actually hold —
+            violations are effectively a recent slice (capped at 5,000 citywide) and transfers span
+            ~18 months — so DPI reflects <strong>present pressure, not a longitudinal gentrification
+            trajectory</strong>. Flips are matched by address (there is no parcel id in the transfer
+            feed) and are not flagged for arm&apos;s-length, so they over- and under-count in ways we
+            can&apos;t fully separate. Tracts under 200 residents are dropped to avoid small-number
+            spikes. Where event counts are zero, the score is carried by rent burden alone — the
+            hotspots list shows the raw counts so you can see which tracts those are.
+          </p>
+        </Section>
+
         <Section title="Known gaps">
           <ul className="list-disc pl-5 space-y-1">
             <li>Eviction filings are not publicly available as open data. We use demolition permits as a proxy.</li>

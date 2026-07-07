@@ -22,6 +22,7 @@ const schemaV2 = readFileSync(join(here, "..", "db", "schema_v2.sql"), "utf8");
 const schemaV3 = readFileSync(join(here, "..", "db", "schema_v3.sql"), "utf8");
 const schemaV4 = readFileSync(join(here, "..", "db", "schema_v4.sql"), "utf8");
 const schemaV5 = readFileSync(join(here, "..", "db", "schema_v5.sql"), "utf8");
+const schemaV6 = readFileSync(join(here, "..", "db", "schema_v6.sql"), "utf8");
 const seed = readFileSync(join(here, "..", "db", "seed_datasources.sql"), "utf8");
 
 const { Pool } = pg;
@@ -42,6 +43,8 @@ try {
   await client.query(schemaV4);
   console.log("applying schema v5 (transfers)...");
   await client.query(schemaV5);
+  console.log("applying schema v6 (displacement index materialized view)...");
+  await client.query(schemaV6);
   console.log("seeding datasources...");
   await client.query(seed);
   console.log("done.");

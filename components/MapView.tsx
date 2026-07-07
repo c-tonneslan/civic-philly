@@ -36,6 +36,7 @@ function formatMetric(id: OverlayId, v: number | null | undefined): string {
   const scale = (overlayMeta(id) as { scale?: string }).scale;
   if (scale === "income") return `$${Math.round(v).toLocaleString()}`;
   if (scale === "pct") return `${Math.round(v)}%`;
+  if (scale === "index") return `${Math.round(v)}`;
   return String(v);
 }
 
@@ -355,7 +356,12 @@ export default function MapView({ points, filters, initialView = DEFAULT_VIEW }:
         setRamp(null);
         return;
       }
-      const resp = await fetch(`/api/overlays/tracts?metric=${overlay}`);
+      // The displacement index is a single precomputed score with its own route;
+      // the ACS metrics share the parameterized tracts route.
+      const url = overlay === "displacement_pressure"
+        ? "/api/overlays/displacement"
+        : `/api/overlays/tracts?metric=${overlay}`;
+      const resp = await fetch(url);
       if (!resp.ok) return;
       const data = await resp.json();
       // Coerce values to numbers defensively. NUMERIC columns sometimes
