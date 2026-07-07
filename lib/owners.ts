@@ -88,7 +88,10 @@ export async function getOwnerSummary(name: string): Promise<OwnerSummary | null
     SELECT po.owner_1 AS owner,
            COUNT(DISTINCT po.parcel_number)::text AS total_parcels,
            COUNT(DISTINCT p.id)::text AS project_count,
-           SUM(po.market_value)::text AS total_market_value,
+           -- Sum market value over parcels alone; the projects join fans out a
+           -- multi-project parcel and would multiply its value (bug parity with listTopOwners).
+           (SELECT COALESCE(SUM(market_value), 0)
+              FROM civic.property_owners WHERE owner_1 = $1)::text AS total_market_value,
            COALESCE(
              ARRAY_AGG(DISTINCT p.council_district_id ORDER BY p.council_district_id)
                FILTER (WHERE p.council_district_id IS NOT NULL),
@@ -110,14 +113,19 @@ export async function getOwnerSummary(name: string): Promise<OwnerSummary | null
   };
 }
 
-export async function getOwnerParcels(name: string, limit = 100): Promise<Owner[]> {
-  const r = await query<Owner>(`
-    SELECT parcel_number, owner_1, owner_2,
-           mailing_address, mailing_city_state, mailing_zip,
-           location_address, market_value
-      FROM civic.property_owners
-     WHERE owner_1 = $1
-     ORDER BY market_value DESC NULLS LAST
+export async function getOwnerParcels(
+  name: string,
+  limit = 100,
+): Promise<(Owner & { project_id: number | null })[]> {
+  const r = await query<Owner & { project_id: number | null }>(`
+    SELECT po.parcel_number, po.owner_1, po.owner_2,
+           po.mailing_address, po.mailing_city_state, po.mailing_zip,
+           po.location_address, po.market_value,
+           (SELECT MIN(pr.id) FROM civic.projects pr
+             WHERE pr.opa_account = po.parcel_number) AS project_id
+      FROM civic.property_owners po
+     WHERE po.owner_1 = $1
+     ORDER BY po.market_value DESC NULLS LAST
      LIMIT $2
   `, [name, limit]);
   return r.rows;

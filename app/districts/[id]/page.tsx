@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDistrict, getDistrictOfficial, getDistrictTimeSeries } from "@/lib/context";
 import { listProjects } from "@/lib/projects";
@@ -6,6 +7,14 @@ import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
 import TimeSeriesChart from "@/components/TimeSeriesChart";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const n = parseInt(id, 10);
+  const title = `District ${n} · civic-philly`;
+  const description = `Development pipeline, stalled projects, and displacement signals in Philadelphia City Council District ${n}.`;
+  return { title, description, openGraph: { title, description } };
+}
 
 export default async function DistrictPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

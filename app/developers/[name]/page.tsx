@@ -1,10 +1,20 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getDeveloper } from "@/lib/developers";
 import { listProjects } from "@/lib/projects";
 import { STATUS_LABELS, TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ name: string }> }): Promise<Metadata> {
+  const { name } = await params;
+  const decoded = decodeURIComponent(name);
+  const title = `${decoded} · civic-philly`;
+  const description = `Development projects by ${decoded} across Philadelphia — status, units, and council districts.`;
+  return { title, description, openGraph: { title, description } };
+}
 
 export default async function DeveloperPage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
@@ -42,7 +52,22 @@ export default async function DeveloperPage({ params }: { params: Promise<{ name
           <Card label="Housing units" value={dev.units_total != null ? dev.units_total.toLocaleString() : "—"} />
           <Card label="Housing projects" value={dev.housing} />
           <Card label="Zoning permits" value={dev.zoning} />
-          <Card label="Districts" value={dev.districts.join(", ") || "—"} small />
+          <Card
+            label="Districts"
+            small
+            value={
+              dev.districts.length ? (
+                <span className="flex flex-wrap gap-x-1.5">
+                  {dev.districts.map((d, i) => (
+                    <span key={d}>
+                      <Link href={`/districts/${d}`} className="underline underline-offset-2 hover:text-[var(--accent)]">{d}</Link>
+                      {i < dev.districts.length - 1 ? "," : ""}
+                    </span>
+                  ))}
+                </span>
+              ) : "—"
+            }
+          />
         </section>
 
         <section className="mt-10">
@@ -67,7 +92,7 @@ export default async function DeveloperPage({ params }: { params: Promise<{ name
   );
 }
 
-function Card({ label, value, small }: { label: string; value: string | number; small?: boolean }) {
+function Card({ label, value, small }: { label: string; value: ReactNode; small?: boolean }) {
   return (
     <div className="border border-[var(--line)] rounded-lg p-4 bg-[var(--panel)]">
       <div className="text-[10px] uppercase tracking-wider text-[var(--ink-dim)] mb-1">{label}</div>

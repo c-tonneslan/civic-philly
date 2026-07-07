@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import SiteNav from "@/components/SiteNav";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 const jbMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
@@ -21,7 +22,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${inter.variable} ${jbMono.variable} h-full antialiased`}>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <SiteNav />
+        {children}
+      </body>
     </html>
   );
 }

@@ -3,6 +3,11 @@ import { getDistrictStats } from "@/lib/context";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Council districts · civic-philly",
+  description: "Development activity, stalled projects, and investment across Philadelphia's 10 City Council districts.",
+};
+
 export default async function DistrictsIndex() {
   const stats = await getDistrictStats().catch(() => []);
 

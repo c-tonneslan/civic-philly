@@ -3,6 +3,11 @@ import { listTopDevelopers } from "@/lib/developers";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Developers · civic-philly",
+  description: "The developers building the most across Philadelphia, ranked by projects in the pipeline.",
+};
+
 export default async function DevelopersPage() {
   const devs = await listTopDevelopers(100).catch(() => []);
 

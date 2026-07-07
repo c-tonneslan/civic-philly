@@ -4,6 +4,11 @@ import { TYPE_COLORS, TYPE_LABELS } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Stalled projects · civic-philly",
+  description: "Philadelphia projects that were proposed or approved over a year ago and never moved — the accountability view nobody else tracks.",
+};
+
 export default async function StalledPage({
   searchParams,
 }: {

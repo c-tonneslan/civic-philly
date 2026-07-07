@@ -74,7 +74,9 @@ export default function Sidebar({ projects, totalCount, neighborhoods, fundingSo
   const activeStatuses = new Set(filters.statuses ?? []);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    // Mobile: the whole column scrolls, so the filter block above the list is
+    // reachable on short screens. Desktop keeps the fixed-filters / scrolling-list split.
+    <div className="flex flex-col h-full overflow-y-auto md:overflow-hidden">
       <div className="px-5 py-4 border-b border-[var(--line)] space-y-4">
         <SearchBox value={filters.q ?? ""} onChange={(q) => update({ q: q || undefined })} />
         <NearMe
@@ -90,7 +92,7 @@ export default function Sidebar({ projects, totalCount, neighborhoods, fundingSo
               <button
                 key={t}
                 onClick={() => toggleType(t)}
-                className={`px-2.5 py-1.5 rounded text-xs flex items-center gap-2 border transition-colors ${
+                className={`px-2.5 py-2.5 md:py-1.5 min-h-[40px] md:min-h-0 rounded text-xs flex items-center gap-2 border transition-colors ${
                   activeTypes.has(t)
                     ? "bg-[var(--panel-2)] border-[var(--line)] text-[var(--ink)]"
                     : "bg-transparent border-[var(--line)] text-[var(--ink-dim)] hover:text-[var(--ink)]"
@@ -110,9 +112,9 @@ export default function Sidebar({ projects, totalCount, neighborhoods, fundingSo
               <button
                 key={s}
                 onClick={() => toggleStatus(s)}
-                className={`px-2 py-1 rounded text-[11px] border ${
+                className={`px-2.5 py-1.5 md:py-1 rounded text-[11px] border transition-colors ${
                   activeStatuses.has(s)
-                    ? "bg-[var(--ink)] text-[var(--bg)] border-[var(--ink)]"
+                    ? "is-active"
                     : "bg-transparent border-[var(--line)] text-[var(--ink-dim)] hover:text-[var(--ink)]"
                 }`}
               >
@@ -203,7 +205,7 @@ export default function Sidebar({ projects, totalCount, neighborhoods, fundingSo
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="overflow-y-auto md:flex-1">
         {projects.length === 0 && (
           <div className="p-5 text-sm text-[var(--ink-dim)]">
             No projects match these filters. Try widening the date range or clearing the neighborhood.
@@ -230,17 +232,6 @@ export default function Sidebar({ projects, totalCount, neighborhoods, fundingSo
           </Link>
         ))}
       </div>
-
-      <footer className="px-5 py-3 border-t border-[var(--line)] flex items-center justify-between gap-2 text-[11px] text-[var(--ink-dim)] flex-wrap">
-        <Link href="/this-week" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">This week</Link>
-        <Link href="/districts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Districts</Link>
-        <Link href="/developers" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Devs</Link>
-        <Link href="/owners" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Owners</Link>
-        <Link href="/transfers" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Buyers</Link>
-        <Link href="/stalled" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Stalled</Link>
-        <Link href="/alerts" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Alerts</Link>
-        <Link href="/methodology" className="hover:text-[var(--ink)] underline-offset-2 hover:underline">Methods</Link>
-      </footer>
     </div>
   );
 }

@@ -18,19 +18,21 @@ export default function MobileShell({ sidebar, children }: Props) {
 
   return (
     <>
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex fixed top-0 left-0 bottom-0 w-[380px] border-r border-[var(--line)] bg-[var(--panel)] flex-col z-10">
+      {/* Desktop sidebar — offset below the global nav (position:fixed ignores
+          the nav in flow, so subtract its height here). */}
+      <aside className="hidden md:flex fixed left-0 bottom-0 w-[380px] border-r border-[var(--line)] bg-[var(--panel)] flex-col z-10" style={{ top: "var(--nav-h)" }}>
         {sidebar}
       </aside>
-      <main className="fixed top-0 right-0 bottom-0 left-0 md:left-[380px]">
+      <main className="fixed right-0 bottom-0 left-0 md:left-[380px]" style={{ top: "var(--nav-h)" }}>
         {children}
       </main>
 
-      {/* Mobile sheet toggle */}
+      {/* Mobile sheet toggle — nudged clear of the iOS home indicator. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="md:hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-30 bg-[var(--ink)] text-[var(--bg)] text-sm font-medium rounded-full px-5 py-2.5 shadow-lg"
+        className="md:hidden fixed left-1/2 -translate-x-1/2 z-30 bg-[var(--accent)] text-[var(--accent-ink)] text-sm font-medium rounded-full px-5 py-2.5 shadow-lg"
+        style={{ bottom: "calc(1rem + env(safe-area-inset-bottom))" }}
       >
         {open ? "Close" : "Filters & list"}
       </button>

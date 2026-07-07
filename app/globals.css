@@ -9,9 +9,28 @@
   --ink: #e7ebef;
   --ink-dim: #9aa3ad;
   --accent: #ffd166;
+  --accent-ink: #0b0c0e;   /* readable text on top of --accent */
+  /* Semantic status hues — desaturated so they sit next to --accent instead of
+     shouting like Tailwind's default stoplight ramp. */
+  --ok: #7bbf8f;
+  --warn: #e0b64d;
+  --down: #d98a7b;
+  --nav-h: 48px;           /* height of the global site nav; map fills below it */
 }
 
 html, body { height: 100%; background: var(--bg); color: var(--ink); }
+
+/* One typographic scale, referenced by role instead of by ad-hoc pixel sizes.
+   eyebrow = uppercase label, meta = secondary text, body = default,
+   title = card/section heading, display = page hero. */
+.t-eyebrow { font-size: 10px; line-height: 1.2; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-dim); }
+.t-meta    { font-size: 12px; line-height: 1.4; color: var(--ink-dim); }
+.t-body    { font-size: 14px; line-height: 1.5; }
+.t-title   { font-size: 18px; line-height: 1.3; font-weight: 600; letter-spacing: -.01em; }
+.t-display { font-size: 30px; line-height: 1.15; font-weight: 700; letter-spacing: -.02em; }
+
+/* Selected/active affordance — the one place the accent earns its keep. */
+.is-active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 body {
   font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
   font-feature-settings: "ss01", "cv11";

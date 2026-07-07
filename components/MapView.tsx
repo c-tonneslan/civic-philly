@@ -13,26 +13,50 @@ interface Props {
 }
 
 const PHL_CENTER: [number, number] = [-75.1652, 39.9526];
-const STYLE_URL = process.env.NEXT_PUBLIC_MAP_STYLE_URL || "https://tiles.openfreemap.org/styles/positron";
+// Dark basemap to match the dark chrome (popups, legend, borders are all styled
+// for dark). A light positron base made the whole app read as two designs.
+const STYLE_URL = process.env.NEXT_PUBLIC_MAP_STYLE_URL || "https://tiles.openfreemap.org/styles/dark";
+
+// One sequential, single-hue (cyan) ramp for the choropleth. Chosen to be
+// perceptually monotonic (varies mostly in luminance, so it survives color-vision
+// deficiency) and distinct from the four categorical TYPE_COLORS (blue/orange/
+// purple/green). The old ramp's top color was identical to the transit dot.
+const CHORO = { lo: "#0a2e33", mid: "#0e7490", hi: "#38e0d0" };
 
 const OVERLAY_OPTIONS = [
   { id: "none",          label: "None" },
-  { id: "rent_burdened", label: "Rent burdened (%)", scale: "pct" },
-  { id: "renter",        label: "Renter occupied (%)", scale: "pct" },
-  { id: "income",        label: "Median income ($)", scale: "income" },
-  { id: "black",         label: "Black population (%)", scale: "pct" },
-  { id: "white",         label: "White population (%)", scale: "pct" },
-  { id: "hispanic",      label: "Hispanic population (%)", scale: "pct" },
+  { id: "rent_burdened", label: "Rent burdened", scale: "pct" },
+  { id: "renter",        label: "Renter occupied", scale: "pct" },
+  { id: "income",        label: "Median income", scale: "income" },
+  { id: "black",         label: "Black population", scale: "pct" },
+  { id: "white",         label: "White population", scale: "pct" },
+  { id: "hispanic",      label: "Hispanic population", scale: "pct" },
 ] as const;
 type OverlayId = (typeof OVERLAY_OPTIONS)[number]["id"];
+
+function overlayMeta(id: OverlayId) {
+  return OVERLAY_OPTIONS.find((o) => o.id === id) ?? OVERLAY_OPTIONS[0];
+}
+function formatMetric(id: OverlayId, v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const scale = (overlayMeta(id) as { scale?: string }).scale;
+  if (scale === "income") return `$${Math.round(v).toLocaleString()}`;
+  if (scale === "pct") return `${Math.round(v)}%`;
+  return String(v);
+}
 
 export default function MapView({ points, filters }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<OverlayId>("none");
+  const [ramp, setRamp] = useState<{ lo: number; hi: number } | null>(null);
   const [showDemolitions, setShowDemolitions] = useState(false);
   const [showViolations, setShowViolations] = useState(false);
+  // The tract click handler is bound once on map load, so it can't close over
+  // the latest `overlay`. Mirror it into a ref the handler reads at click time.
+  const overlayRef = useRef<OverlayId>("none");
+  overlayRef.current = overlay;
 
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
@@ -68,13 +92,13 @@ export default function MapView({ points, filters }: Props) {
         id: "tracts-fill", type: "fill", source: "tracts",
         paint: {
           "fill-color": ["interpolate", ["linear"], ["coalesce", ["get", "value"], 0],
-            0, "#0b0c0e", 100, "#ea580c"],
-          "fill-opacity": 0.45,
+            0, CHORO.lo, 100, CHORO.hi],
+          "fill-opacity": 0.6,
         },
       }, /* beforeId */ undefined);
       map.addLayer({
         id: "tracts-line", type: "line", source: "tracts",
-        paint: { "line-color": "rgba(255,255,255,0.08)", "line-width": 0.5 },
+        paint: { "line-color": "rgba(255,255,255,0.14)", "line-width": 0.5 },
       });
 
       // Demolitions source.
@@ -82,7 +106,7 @@ export default function MapView({ points, filters }: Props) {
       map.addLayer({
         id: "demolitions-circles", type: "circle", source: "demolitions",
         paint: {
-          "circle-color": "#dc2626",
+          "circle-color": "#d98a7b",
           "circle-radius": 4,
           "circle-opacity": 0.7,
           "circle-stroke-width": 1,
@@ -96,7 +120,7 @@ export default function MapView({ points, filters }: Props) {
       map.addLayer({
         id: "violations-circles", type: "circle", source: "violations",
         paint: {
-          "circle-color": "#f59e0b",
+          "circle-color": "#e0b64d",
           "circle-radius": 3,
           "circle-opacity": 0.55,
         },
@@ -178,18 +202,20 @@ export default function MapView({ points, filters }: Props) {
           .setLngLat(coords).setHTML(html).addTo(map);
       });
 
-      // Tract popup: show ACS values for clicked tract.
+      // Tract popup: name the active metric and format its value ($ vs %).
       map.on("click", "tracts-fill", (e) => {
         const f = e.features?.[0];
         if (!f) return;
-        const value = f.properties?.value;
+        const id = overlayRef.current;
+        const raw = f.properties?.value;
+        const value = raw == null ? null : Number(raw);
         const geoid = f.properties?.geoid;
         new maplibregl.Popup({ closeButton: true })
           .setLngLat(e.lngLat)
           .setHTML(`
             <div class="text-xs">
-              <div class="opacity-60 uppercase tracking-wider text-[10px]">Census tract ${String(geoid).slice(-6)}</div>
-              <div class="text-sm font-medium mt-1">${value ?? "—"}${typeof value === "number" && value <= 100 ? "%" : ""}</div>
+              <div class="opacity-60 uppercase tracking-wider text-[10px]">${escapeHtml(overlayMeta(id).label)} · tract ${String(geoid).slice(-6)}</div>
+              <div class="text-sm font-medium mt-1">${formatMetric(id, value)}</div>
             </div>
           `).addTo(map);
       });
@@ -249,6 +275,7 @@ export default function MapView({ points, filters }: Props) {
       if (!src) return;
       if (overlay === "none") {
         src.setData({ type: "FeatureCollection", features: [] });
+        setRamp(null);
         return;
       }
       const resp = await fetch(`/api/overlays/tracts?metric=${overlay}`);
@@ -270,8 +297,9 @@ export default function MapView({ points, filters }: Props) {
       src.setData(data);
       map.setPaintProperty("tracts-fill", "fill-color", [
         "interpolate", ["linear"], ["to-number", ["coalesce", ["get", "value"], lo]],
-        lo, "#1a3a52", (lo + hi) / 2, "#d97706", hi, "#ea580c",
+        lo, CHORO.lo, (lo + hi) / 2, CHORO.mid, hi, CHORO.hi,
       ]);
+      setRamp({ lo, hi });
     };
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
@@ -324,7 +352,7 @@ export default function MapView({ points, filters }: Props) {
     <>
       <div ref={containerRef} className="w-full h-full" />
       {error && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[var(--panel)] border border-red-500/50 rounded-lg px-4 py-3 text-sm text-red-300 max-w-md shadow-lg z-10">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-[var(--panel)] border border-red-500/50 rounded-lg px-4 py-3 text-sm text-red-300 w-[calc(100vw-2rem)] max-w-md break-words shadow-lg z-10">
           {error}
         </div>
       )}
@@ -333,7 +361,7 @@ export default function MapView({ points, filters }: Props) {
         showDemolitions={showDemolitions} setShowDemolitions={setShowDemolitions}
         showViolations={showViolations} setShowViolations={setShowViolations}
       />
-      <Legend />
+      <Legend overlay={overlay} ramp={ramp} showDemolitions={showDemolitions} showViolations={showViolations} />
     </>
   );
 }
@@ -362,26 +390,62 @@ function Overlays({
       </select>
       <label className="flex items-center gap-2 text-xs pt-1">
         <input type="checkbox" checked={showDemolitions} onChange={(e) => setShowDemolitions(e.target.checked)} />
-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-600 inline-block" />Demolition permits (3y)</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: "var(--down)" }} />Demolition permits (3y)</span>
       </label>
       <label className="flex items-center gap-2 text-xs">
         <input type="checkbox" checked={showViolations} onChange={(e) => setShowViolations(e.target.checked)} />
-        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />Housing-code violations (1y)</span>
+        <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: "var(--warn)" }} />Housing-code violations (1y)</span>
       </label>
     </div>
   );
 }
 
-function Legend() {
+function Legend({
+  overlay, ramp, showDemolitions, showViolations,
+}: {
+  overlay: OverlayId;
+  ramp: { lo: number; hi: number } | null;
+  showDemolitions: boolean;
+  showViolations: boolean;
+}) {
   const entries: ProjectType[] = ["housing", "transit", "zoning", "infrastructure"];
+  const meta = overlayMeta(overlay);
+  const showChoro = overlay !== "none" && ramp;
   return (
-    <div className="absolute bottom-4 right-4 bg-[var(--panel)]/95 backdrop-blur border border-[var(--line)] rounded-lg px-3 py-2.5 text-xs space-y-1.5 shadow-lg">
-      {entries.map((t) => (
-        <div key={t} className="flex items-center gap-2">
-          <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[t] }} />
-          <span>{TYPE_LABELS[t]}</span>
+    <div className="absolute bottom-4 right-4 bg-[var(--panel)]/95 backdrop-blur border border-[var(--line)] rounded-lg px-3 py-2.5 text-xs space-y-2 shadow-lg max-w-[220px]">
+      {showChoro && (
+        <div className="space-y-1 pb-2 border-b border-[var(--line)]">
+          <div className="t-eyebrow">{meta.label}</div>
+          <div
+            className="h-2 w-full rounded"
+            style={{ background: `linear-gradient(90deg, ${CHORO.lo}, ${CHORO.mid}, ${CHORO.hi})` }}
+          />
+          <div className="flex justify-between t-meta">
+            <span>{formatMetric(overlay, ramp!.lo)}</span>
+            <span>{formatMetric(overlay, ramp!.hi)}</span>
+          </div>
         </div>
-      ))}
+      )}
+      <div className="space-y-1.5">
+        {entries.map((t) => (
+          <div key={t} className="flex items-center gap-2">
+            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[t] }} />
+            <span>{TYPE_LABELS[t]}</span>
+          </div>
+        ))}
+        {showDemolitions && (
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "var(--down)" }} />
+            <span>Demolition permit</span>
+          </div>
+        )}
+        {showViolations && (
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "var(--warn)" }} />
+            <span>Code violation</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

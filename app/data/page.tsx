@@ -3,6 +3,11 @@ import { listDatasources } from "@/lib/datasources";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Data sources · civic-philly",
+  description: "Every dataset behind civic-philly — where it comes from, when it last refreshed, and how many records it holds.",
+};
+
 export default async function DataPage() {
   const sources = await listDatasources().catch(() => []);
 

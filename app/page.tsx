@@ -61,7 +61,7 @@ export default async function Home({
   );
 
   return (
-    <div className="w-screen h-screen overflow-hidden">
+    <div className="w-screen overflow-hidden" style={{ height: "calc(100dvh - var(--nav-h))" }}>
       <MobileShell sidebar={sidebar}>
         <MapView points={points} filters={filters} />
       </MobileShell>
