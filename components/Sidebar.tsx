@@ -12,6 +12,7 @@ import NearMe from "./NearMe";
 
 interface Props {
   projects: Project[];
+  totalCount: number;
   neighborhoods: string[];
   fundingSources: string[];
   activeFilters: ProjectFilters;
@@ -38,10 +39,17 @@ function buildQuery(filters: ProjectFilters): string {
   return s ? `?${s}` : "";
 }
 
-export default function Sidebar({ projects, neighborhoods, fundingSources, activeFilters }: Props) {
+export default function Sidebar({ projects, totalCount, neighborhoods, fundingSources, activeFilters }: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [filters, setFilters] = useState<ProjectFilters>(activeFilters);
+
+  // Re-sync local state when the URL-derived filters change out from under us —
+  // Back/Forward navigation and shared-link loads swap `activeFilters` (a fresh
+  // prop from the server render) without going through update(), so without this
+  // the controls would show stale selections. The dep only changes on a server
+  // re-render (navigation), not on our own client-side setFilters, so no loop.
+  useEffect(() => { setFilters(activeFilters); }, [activeFilters]);
 
   function update(patch: Partial<ProjectFilters>) {
     const next = { ...filters, ...patch };
@@ -176,7 +184,7 @@ export default function Sidebar({ projects, neighborhoods, fundingSources, activ
 
         <div className="flex items-center justify-between pt-1">
           <span className="text-[11px] text-[var(--ink-dim)]">
-            {pending ? "updating…" : `${projects.length} projects`}
+            {pending ? "updating…" : `${totalCount.toLocaleString()} projects`}
           </span>
           <div className="flex items-center gap-3">
             <a

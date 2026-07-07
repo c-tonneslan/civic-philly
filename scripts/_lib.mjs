@@ -174,8 +174,13 @@ export function asNumber(v) {
 
 export function asDate(v) {
   if (!v) return null;
-  // ArcGIS dates come as epoch millis.
-  if (typeof v === "number" && v > 0) return new Date(v).toISOString().slice(0, 10);
+  if (typeof v === "number") {
+    // A small integer is a year (e.g. fiscal_year_complete = 2019), not epoch
+    // millis — new Date(2019) would be 1970-01-01. Epoch-millis timestamps are ~1e12.
+    if (v >= 1900 && v <= 2100) return `${v}-01-01`;
+    if (v > 1e11) return new Date(v).toISOString().slice(0, 10);
+    return null;
+  }
   if (typeof v === "string") {
     if (/^\d{4}$/.test(v)) return `${v}-01-01`;
     const d = new Date(v);

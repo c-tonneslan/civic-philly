@@ -15,20 +15,34 @@ export function parseFiltersFromSearchParams(sp: URLSearchParams): ProjectFilter
   const districtId = sp.get("district") ? Number(sp.get("district")) : undefined;
   const developer = sp.get("developer") || undefined;
   const q = sp.get("q") || undefined;
-  const startYear = sp.get("startYear") ? Number(sp.get("startYear")) : undefined;
-  const endYear = sp.get("endYear") ? Number(sp.get("endYear")) : undefined;
+
+  // A year that isn't a plausible 4-digit integer would produce a bogus
+  // `${year}-01-01` date string downstream (a 500 from Postgres). Clamp instead.
+  const year = (key: string): number | undefined => {
+    const raw = sp.get(key);
+    if (!raw) return undefined;
+    const n = parseInt(raw, 10);
+    return Number.isInteger(n) && n >= 1900 && n <= 2100 ? n : undefined;
+  };
+
+  // radius/lat/lng flow into ST_DWithin. Number("Infinity") is a valid number
+  // but NOT finite, so an Infinity radius would sweep the whole table. Require
+  // finite values and sane geographic bounds; clamp the radius to <= 50km.
   const lat = sp.get("lat") ? Number(sp.get("lat")) : undefined;
   const lng = sp.get("lng") ? Number(sp.get("lng")) : undefined;
-  const radius = sp.get("radius") ? Number(sp.get("radius")) : undefined;
-  const near = (lat != null && lng != null && radius != null && !Number.isNaN(lat) && !Number.isNaN(lng) && !Number.isNaN(radius))
-    ? { lat, lng, radiusMeters: radius }
-    : undefined;
+  const radiusRaw = sp.get("radius") ? Number(sp.get("radius")) : undefined;
+  const near =
+    lat != null && lng != null && radiusRaw != null &&
+    Number.isFinite(lat) && Number.isFinite(lng) && Number.isFinite(radiusRaw) &&
+    lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180 && radiusRaw > 0
+      ? { lat, lng, radiusMeters: Math.min(radiusRaw, 50000) }
+      : undefined;
 
   return {
     types, statuses, neighborhood, fundingSource, developer, q,
     districtId: Number.isFinite(districtId) ? districtId : undefined,
-    startYear: Number.isFinite(startYear) ? startYear : undefined,
-    endYear: Number.isFinite(endYear) ? endYear : undefined,
+    startYear: year("startYear"),
+    endYear: year("endYear"),
     near,
   };
 }

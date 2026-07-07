@@ -31,20 +31,44 @@ export async function listTopOwners(limit = 50): Promise<OwnerSummary[]> {
     total_market_value: string | null;
     districts: number[];
   }>(`
-    SELECT po.owner_1 AS owner,
-           COUNT(DISTINCT po.parcel_number)::text AS total_parcels,
-           COUNT(DISTINCT p.id)::text AS project_count,
-           SUM(po.market_value)::text AS total_market_value,
-           COALESCE(
-             ARRAY_AGG(DISTINCT p.council_district_id ORDER BY p.council_district_id)
-               FILTER (WHERE p.council_district_id IS NOT NULL),
-             '{}'
-           ) AS districts
-      FROM civic.property_owners po
-      JOIN civic.projects p ON p.opa_account = po.parcel_number
-     WHERE po.owner_1 IS NOT NULL
-     GROUP BY po.owner_1
-     ORDER BY total_parcels DESC, project_count DESC
+    WITH matched AS (
+      SELECT po.owner_1 AS owner, po.parcel_number, po.market_value,
+             p.id AS project_id, p.council_district_id
+        FROM civic.property_owners po
+        JOIN civic.projects p ON p.opa_account = po.parcel_number
+       WHERE po.owner_1 IS NOT NULL
+    ),
+    -- Collapse to one row per (owner, parcel) FIRST, so a parcel that hosts
+    -- several projects contributes its market_value once — the old flat SUM
+    -- over the join multiplied each parcel's value by its project count.
+    parcels AS (
+      SELECT owner, parcel_number, MAX(market_value) AS market_value
+        FROM matched
+       GROUP BY owner, parcel_number
+    ),
+    owner_value AS (
+      SELECT owner, COUNT(*) AS total_parcels, SUM(market_value) AS total_market_value
+        FROM parcels
+       GROUP BY owner
+    ),
+    owner_projects AS (
+      SELECT owner, COUNT(DISTINCT project_id) AS project_count,
+             COALESCE(
+               ARRAY_AGG(DISTINCT council_district_id ORDER BY council_district_id)
+                 FILTER (WHERE council_district_id IS NOT NULL),
+               '{}'
+             ) AS districts
+        FROM matched
+       GROUP BY owner
+    )
+    SELECT ov.owner,
+           ov.total_parcels::text AS total_parcels,
+           op.project_count::text AS project_count,
+           ov.total_market_value::text AS total_market_value,
+           op.districts
+      FROM owner_value ov
+      JOIN owner_projects op ON op.owner = ov.owner
+     ORDER BY ov.total_parcels DESC, op.project_count DESC
      LIMIT $1
   `, [limit]);
   return r.rows.map((row) => ({

@@ -45,7 +45,10 @@ function asNum(v) {
 }
 
 function pct(num, denom) {
-  if (!num || !denom || denom === 0) return null;
+  // Only the denominator being missing/zero makes the ratio undefined. Guard on
+  // that alone — a numerator of 0 is a legitimate 0%, not missing data, so the
+  // old `!num` check wrongly nulled out real zeros (e.g. 0% of a group present).
+  if (num == null || denom == null || denom === 0) return null;
   return Math.round((num / denom) * 10000) / 100;
 }
 

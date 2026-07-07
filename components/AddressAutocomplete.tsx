@@ -39,19 +39,25 @@ export default function AddressAutocomplete({
       setSuggestions([]);
       return;
     }
+    // Abort an in-flight request when the query changes, so a slow response for
+    // an old keystroke can't land after a newer one and show stale suggestions.
+    const ctrl = new AbortController();
     timer.current = setTimeout(async () => {
       const q = `${value}, Philadelphia, PA`;
       const url = `${GEOCODER_URL}?format=json&limit=5&countrycodes=us&viewbox=${PHILLY_VIEWBOX}&bounded=1&q=${encodeURIComponent(q)}`;
       try {
-        const resp = await fetch(url, { headers: { "Accept-Language": "en" } });
+        const resp = await fetch(url, { headers: { "Accept-Language": "en" }, signal: ctrl.signal });
         if (!resp.ok) return;
         const arr = (await resp.json()) as Suggestion[];
         setSuggestions(Array.isArray(arr) ? arr : []);
       } catch {
-        // Network failures are silent. The user can still hit enter to submit.
+        // Network failures (and aborts) are silent. The user can still hit enter to submit.
       }
     }, 350);
-    return () => { if (timer.current) clearTimeout(timer.current); };
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+      ctrl.abort();
+    };
   }, [value]);
 
   useEffect(() => {

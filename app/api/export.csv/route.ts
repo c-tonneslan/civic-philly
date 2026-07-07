@@ -12,7 +12,12 @@ const COLS = [
 
 function csvEscape(v: unknown): string {
   if (v == null) return "";
-  const s = String(v);
+  let s = String(v);
+  // Formula-injection guard: a spreadsheet treats a cell starting with = + - @
+  // (or a leading tab/CR) as a formula. Prefix a single quote to neutralise it
+  // before the CSV quoting below. Values here are civic data, but source_url /
+  // name are free-text and could carry a crafted payload.
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   if (s.includes(",") || s.includes("\"") || s.includes("\n")) {
     return `"${s.replace(/"/g, '""')}"`;
   }

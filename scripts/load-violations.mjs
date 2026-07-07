@@ -31,8 +31,17 @@ async function main() {
   const rows = json.rows ?? [];
   console.log(`got ${rows.length} rows`);
 
+  // Don't wipe the table on an empty pull (Carto hiccup) and "succeed" with 0.
+  if (rows.length === 0) {
+    console.error("refusing to truncate: source returned 0 rows");
+    await pool.end();
+    process.exitCode = 1;
+    return;
+  }
+
   const client = await pool.connect();
   let n = 0;
+  let failed = 0;
   try {
     await client.query("BEGIN");
     await client.query("TRUNCATE civic.violations RESTART IDENTITY");
@@ -43,6 +52,10 @@ async function main() {
       if (lng < PHL_BBOX.minLng || lng > PHL_BBOX.maxLng) continue;
       const date = r.violationdate ? r.violationdate.slice(0, 10) : null;
       if (!date) continue;
+      if (r.violationnumber == null) continue; // NOT NULL external_id / conflict key
+      // SAVEPOINT per row so one constraint failure doesn't abort the whole
+      // transaction (which would make COMMIT roll back and report a false success).
+      await client.query("SAVEPOINT row");
       try {
         await client.query(
           `INSERT INTO civic.violations
@@ -51,9 +64,12 @@ async function main() {
            ON CONFLICT (external_id) DO NOTHING`,
           [r.violationnumber, r.casenumber, date, r.address, r.violationcodetitle, r.casestatus, lng, lat],
         );
+        await client.query("RELEASE SAVEPOINT row");
         n++;
-      } catch {
-        // skip rows that fail any constraint
+      } catch (e) {
+        await client.query("ROLLBACK TO SAVEPOINT row");
+        failed++;
+        if (failed <= 5) console.error("row failed:", e.message);
       }
     }
     await client.query("COMMIT");
@@ -63,7 +79,7 @@ async function main() {
   } finally {
     client.release();
   }
-  console.log(`done. ${n} violations loaded.`);
+  console.log(`done. ${n} violations loaded${failed ? `, ${failed} rows failed` : ""}.`);
   await pool.end();
 }
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createSubscription } from "@/lib/alerts";
+import { createSubscription, recentUnverifiedCount } from "@/lib/alerts";
 import { getResend, FROM_EMAIL } from "@/lib/email";
 import { PROJECT_TYPES } from "@/lib/types";
 
@@ -22,6 +22,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid input", details: parsed.error.flatten() }, { status: 400 });
   }
 
+  // Throttle mailbombing: cap unverified confirmation emails per address/hour.
+  // Return ok regardless so we don't reveal whether the email is already on file.
+  if (await recentUnverifiedCount(parsed.data.email) >= 3) {
+    return NextResponse.json({ ok: true });
+  }
+
   const sub = await createSubscription({
     email: parsed.data.email,
     addressLabel: parsed.data.addressLabel,
@@ -31,8 +37,16 @@ export async function POST(req: Request) {
     projectTypes: parsed.data.projectTypes as never,
   });
 
+  // Build confirmation links from a trusted, server-configured origin only.
+  // The Origin/Host headers are attacker-controllable, so deriving the link from
+  // them would let a forged request mint a verify link pointing at an attacker
+  // host that still carries the real token. Fail closed in production.
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-    || (req.headers.get("origin") ?? "http://localhost:3000");
+    || (process.env.NODE_ENV !== "production" ? "http://localhost:3000" : null);
+  if (!baseUrl) {
+    console.error("alerts: NEXT_PUBLIC_BASE_URL is not set; refusing to send with an untrusted origin");
+    return NextResponse.json({ error: "server misconfigured" }, { status: 500 });
+  }
   const verifyUrl = `${baseUrl}/api/alerts/verify?token=${sub.verify_token}`;
   const unsubUrl = `${baseUrl}/api/alerts/unsubscribe?token=${sub.unsubscribe_token}`;
 

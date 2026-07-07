@@ -173,9 +173,19 @@ export async function getStalledProjects(days = 365, limit = 200): Promise<Stall
        FLOOR(EXTRACT(EPOCH FROM (NOW() - h.observed_at)) / 86400)::int AS days_in_status
      FROM civic.projects p
      JOIN LATERAL (
-       SELECT observed_at FROM civic.status_history
-        WHERE project_id = p.id AND status = p.status
-        ORDER BY observed_at ASC LIMIT 1
+       -- Anchor to the CURRENT continuous run in this status, not the first time
+       -- it was ever seen. A project that was approved, changed, then re-entered
+       -- 'approved' should count from the latest entry — otherwise days_in_status
+       -- is overstated. The run starts at the earliest snapshot in this status
+       -- that comes after the last snapshot in any other status.
+       SELECT MIN(sh.observed_at) AS observed_at
+         FROM civic.status_history sh
+        WHERE sh.project_id = p.id
+          AND sh.status = p.status
+          AND sh.observed_at > COALESCE(
+            (SELECT MAX(x.observed_at) FROM civic.status_history x
+              WHERE x.project_id = p.id AND x.status <> p.status),
+            '-infinity'::timestamptz)
      ) h ON TRUE
      WHERE p.status IN ('proposed', 'approved')
        AND h.observed_at < NOW() - ($1 || ' days')::interval
@@ -208,7 +218,11 @@ export async function getTractsForChoropleth(
     // Cast NUMERIC columns to float8 so pg returns them as JS numbers.
     // Otherwise they come back as strings and the maplibre interpolate
     // expression errors with "Expected number but found string instead."
-    `SELECT geoid, ${col}::float8 AS value, ST_AsGeoJSON(geom::geometry) AS geom_geojson
+    // Simplify (~20m tolerance) and trim coordinates to 6 decimals before
+    // shipping the choropleth. Full-resolution tract polygons are a large
+    // payload for a fill layer that renders at city zoom anyway.
+    `SELECT geoid, ${col}::float8 AS value,
+            ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom::geometry, 0.0002), 6) AS geom_geojson
        FROM civic.census_tracts
        WHERE ${col} IS NOT NULL`,
   );

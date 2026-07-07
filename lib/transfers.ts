@@ -69,21 +69,40 @@ export async function getTopBuyers(months = 12, limit = 50): Promise<BuyerSummar
     total_consideration: string;
     districts: number[];
   }>(`
-    SELECT t.grantee,
-           COUNT(*)::text AS n_purchases,
-           SUM(t.consideration)::text AS total_consideration,
-           COALESCE(
-             ARRAY_AGG(DISTINCT d.id ORDER BY d.id)
-               FILTER (WHERE d.id IS NOT NULL),
-             '{}'
-           ) AS districts
-      FROM civic.transfers t
-      LEFT JOIN civic.council_districts d ON ST_Intersects(t.geom, d.geom)
-     WHERE t.grantee IS NOT NULL
-       AND t.transfer_date >= NOW() - ($1 || ' months')::interval
-     GROUP BY t.grantee
-     HAVING COUNT(*) >= 2
-     ORDER BY n_purchases DESC, total_consideration DESC
+    WITH recent AS (
+      SELECT t.grantee, t.consideration, t.geom
+        FROM civic.transfers t
+       WHERE t.grantee IS NOT NULL
+         AND t.transfer_date >= NOW() - ($1 || ' months')::interval
+    ),
+    -- Count purchases before touching the district join. A transfer whose point
+    -- intersects two districts would otherwise be double-counted by the fan-out.
+    buyers AS (
+      SELECT grantee,
+             COUNT(*) AS n_purchases,
+             SUM(consideration) AS total_consideration
+        FROM recent
+       GROUP BY grantee
+      HAVING COUNT(*) >= 2
+    ),
+    buyer_districts AS (
+      SELECT r.grantee,
+             COALESCE(
+               ARRAY_AGG(DISTINCT d.id ORDER BY d.id)
+                 FILTER (WHERE d.id IS NOT NULL),
+               '{}'
+             ) AS districts
+        FROM recent r
+        LEFT JOIN civic.council_districts d ON ST_Intersects(r.geom, d.geom)
+       GROUP BY r.grantee
+    )
+    SELECT b.grantee,
+           b.n_purchases::text AS n_purchases,
+           b.total_consideration::text AS total_consideration,
+           bd.districts
+      FROM buyers b
+      JOIN buyer_districts bd ON bd.grantee = b.grantee
+     ORDER BY b.n_purchases DESC, b.total_consideration DESC
      LIMIT $2
   `, [String(months), limit]);
 

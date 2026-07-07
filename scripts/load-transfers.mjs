@@ -45,8 +45,18 @@ async function main() {
   const rows = json.rows ?? [];
   console.log(`got ${rows.length} rows`);
 
+  // Don't TRUNCATE on an empty pull — a Carto hiccup returning zero rows would
+  // otherwise wipe the whole table and "succeed" with 0 loaded.
+  if (rows.length === 0) {
+    console.error("refusing to truncate: source returned 0 rows");
+    await pool.end();
+    process.exitCode = 1;
+    return;
+  }
+
   const client = await pool.connect();
   let n = 0;
+  let failed = 0;
   try {
     await client.query("BEGIN");
     await client.query("TRUNCATE civic.transfers RESTART IDENTITY");
@@ -57,6 +67,11 @@ async function main() {
       if (lng < PHL_BBOX.minLng || lng > PHL_BBOX.maxLng) continue;
       const date = r.display_date ? r.display_date.slice(0, 10) : null;
       if (!date) continue;
+      if (r.document_id == null) continue; // external_id is the conflict key; skip null
+      // SAVEPOINT per row: a failed INSERT aborts only its own subtransaction.
+      // Without this, one bad row poisons the whole BEGIN/COMMIT — every later
+      // query errors and COMMIT silently rolls back, discarding the entire load.
+      await client.query("SAVEPOINT row");
       try {
         await client.query(
           `INSERT INTO civic.transfers
@@ -74,9 +89,12 @@ async function main() {
             lng, lat,
           ],
         );
+        await client.query("RELEASE SAVEPOINT row");
         n++;
       } catch (e) {
-        if (n < 5) console.error("row failed:", e.message);
+        await client.query("ROLLBACK TO SAVEPOINT row");
+        failed++;
+        if (failed <= 5) console.error("row failed:", e.message);
       }
     }
     await client.query("COMMIT");
@@ -86,7 +104,7 @@ async function main() {
   } finally {
     client.release();
   }
-  console.log(`done. ${n} transfers loaded.`);
+  console.log(`done. ${n} transfers loaded${failed ? `, ${failed} rows failed` : ""}.`);
   await pool.end();
 }
 

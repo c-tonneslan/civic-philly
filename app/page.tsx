@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { listMapProjects, listNeighborhoods, listFundingSources, listProjects } from "@/lib/projects";
+import { listMapProjects, listNeighborhoods, listFundingSources, listProjects, countProjects } from "@/lib/projects";
 import { parseFiltersFromSearchParams } from "@/lib/filterParams";
 import Sidebar from "@/components/Sidebar";
 import MapView from "@/components/MapView";
@@ -28,9 +28,10 @@ export default async function Home({
   const sp = await searchParams;
   const filters = parseFiltersFromSearchParams(toUrlSearchParams(sp));
 
-  const [points, projects, neighborhoods, fundingSources] = await Promise.all([
+  const [points, projects, totalCount, neighborhoods, fundingSources] = await Promise.all([
     listMapProjects(filters).catch(() => []),
     listProjects(filters, 30, 0).catch(() => []),
+    countProjects(filters).catch(() => 0),
     listNeighborhoods().catch(() => []),
     listFundingSources().catch(() => []),
   ]);
@@ -49,6 +50,7 @@ export default async function Home({
       <Suspense fallback={<div className="p-5 text-sm text-[var(--ink-dim)]">loading…</div>}>
         <Sidebar
           projects={projects}
+          totalCount={totalCount}
           neighborhoods={neighborhoods}
           fundingSources={fundingSources}
           activeFilters={filters}

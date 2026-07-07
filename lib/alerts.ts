@@ -20,6 +20,24 @@ export function token(): string {
   return crypto.randomBytes(24).toString("base64url");
 }
 
+// Anti-abuse throttle for the no-account signup. Anyone can POST an arbitrary
+// email, so without a cap an attacker could mailbomb a victim by looping (and
+// varying address_label to dodge the UNIQUE constraint). Count how many
+// unverified confirmation rows this email already produced in the last hour;
+// the route stops creating/sending past a small threshold. Verified rows and
+// distinct real signups are unaffected.
+export async function recentUnverifiedCount(email: string): Promise<number> {
+  const r = await query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n
+       FROM civic.alert_subscriptions
+      WHERE lower(email) = lower($1)
+        AND verified = FALSE
+        AND created_at > NOW() - INTERVAL '1 hour'`,
+    [email],
+  );
+  return Number(r.rows[0]?.n ?? 0);
+}
+
 export async function createSubscription(input: {
   email: string;
   addressLabel: string;
@@ -40,8 +58,14 @@ export async function createSubscription(input: {
        SET radius_meters = EXCLUDED.radius_meters,
            project_types = EXCLUDED.project_types,
            geom = EXCLUDED.geom,
-           verify_token = EXCLUDED.verify_token,
-           verified = FALSE
+           -- Preserve an already-confirmed subscription. Without this, anyone who
+           -- knows a subscriber's email+address could re-POST to flip verified
+           -- back to FALSE (silencing their alerts) and rotate their token. Only
+           -- rotate the token / stay unverified when it wasn't verified already.
+           verify_token = CASE WHEN alert_subscriptions.verified
+                               THEN alert_subscriptions.verify_token
+                               ELSE EXCLUDED.verify_token END,
+           verified = alert_subscriptions.verified
      RETURNING id, email, address_label, radius_meters, project_types,
                verified, verify_token, unsubscribe_token,
                ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lng,
@@ -67,11 +91,15 @@ export async function verifySubscription(verifyToken: string): Promise<AlertSubs
 }
 
 export async function unsubscribe(unsubToken: string): Promise<boolean> {
-  const r = await query(
-    "DELETE FROM civic.alert_subscriptions WHERE unsubscribe_token = $1",
-    [unsubToken],
-  );
-  return (r.rowCount ?? 0) > 0;
+  // The same endpoint serves both alert subscriptions (proximity alerts) and
+  // follows (district/developer/project digests) — the digest email links here
+  // with a follows token. Delete from both so a digest unsubscribe actually
+  // stops the mail instead of silently no-op'ing.
+  const [a, f] = await Promise.all([
+    query("DELETE FROM civic.alert_subscriptions WHERE unsubscribe_token = $1", [unsubToken]),
+    query("DELETE FROM civic.follows WHERE unsubscribe_token = $1", [unsubToken]),
+  ]);
+  return (a.rowCount ?? 0) > 0 || (f.rowCount ?? 0) > 0;
 }
 
 export async function listVerifiedSubscriptions(): Promise<AlertSubscription[]> {

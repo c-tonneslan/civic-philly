@@ -37,7 +37,10 @@ function buildFilterClause(filters: ProjectFilters, params: unknown[]): string {
   }
   if (filters.startYear) {
     params.push(`${filters.startYear}-01-01`);
-    where.push(`(start_date >= $${params.length} OR approved_date >= $${params.length} OR first_seen_at >= $${params.length})`);
+    // Pick the best available project date, then compare once. The old OR-form
+    // included first_seen_at (our scrape timestamp, recent for everything), which
+    // made the whole clause a no-op — every row matched via that branch.
+    where.push(`COALESCE(start_date, approved_date, first_seen_at) >= $${params.length}`);
   }
   if (filters.endYear) {
     params.push(`${filters.endYear}-12-31`);
@@ -73,6 +76,7 @@ export async function listMapProjects(filters: ProjectFilters): Promise<MapProje
            ST_X(geom::geometry) AS lng
     FROM civic.projects
     ${whereSql}
+    ORDER BY id
     LIMIT 5000
   `;
   const r = await query<MapProject>(sql, params);
@@ -104,6 +108,18 @@ export async function listProjects(filters: ProjectFilters, limit = 50, offset =
   `;
   const r = await query<Project>(sql, params);
   return r.rows;
+}
+
+// Total number of projects matching the filters — for the sidebar count, which
+// otherwise reflected only the current page (max 30 rows).
+export async function countProjects(filters: ProjectFilters): Promise<number> {
+  const params: unknown[] = [];
+  const whereSql = buildFilterClause(filters, params);
+  const r = await query<{ n: string }>(
+    `SELECT COUNT(*)::text AS n FROM civic.projects ${whereSql}`,
+    params,
+  );
+  return Number(r.rows[0]?.n ?? 0);
 }
 
 export async function getProject(id: number): Promise<Project | null> {
