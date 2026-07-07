@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useTransition, useState } from "react";
+import { useEffect, useRef, useTransition, useState } from "react";
 import type { Project, ProjectFilters, ProjectStatus, ProjectType } from "@/lib/types";
 import {
   PROJECT_STATUSES, PROJECT_TYPES,
@@ -10,6 +10,7 @@ import {
 } from "@/lib/types";
 import NearMe from "./NearMe";
 import { copyViewKeysInto } from "@/lib/useMapUrlState";
+import { useRowState, setHovered } from "@/lib/mapSelection";
 
 interface Props {
   projects: Project[];
@@ -228,27 +229,51 @@ export default function Sidebar({ projects, totalCount, neighborhoods, fundingSo
           </div>
         )}
         {projects.map((p) => (
-          <Link
-            key={p.id}
-            href={`/projects/${p.id}`}
-            className="block px-5 py-3 border-b border-[var(--line)] hover:bg-[var(--panel-2)] transition-colors"
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[p.project_type] }} />
-              <span className="text-[10px] uppercase tracking-wider text-[var(--ink-dim)]">
-                {TYPE_LABELS[p.project_type]} · {STATUS_LABELS[p.status]}
-              </span>
-            </div>
-            <div className="text-sm font-medium leading-snug">{p.name}</div>
-            <div className="text-xs text-[var(--ink-dim)] mt-1 flex gap-3">
-              {p.neighborhood && <span>{p.neighborhood}</span>}
-              {p.units_total != null && p.units_total > 0 && <span>{p.units_total} units</span>}
-              {p.funding_amount != null && <span>${(p.funding_amount / 1_000_000).toFixed(1)}M</span>}
-            </div>
-          </Link>
+          <ProjectRow key={p.id} p={p} />
         ))}
       </div>
     </div>
+  );
+}
+
+function ProjectRow({ p }: { p: Project }) {
+  // 0 none · 1 hovered · 2 selected. Driven by the shared store so hovering the
+  // map pin highlights this row (and scrolls it into view), and hovering this
+  // row highlights the pin. Selected (a clicked pin) wins the styling.
+  const state = useRowState(p.id);
+  const ref = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    // block:"nearest" is a no-op when the row is already visible (i.e. when you
+    // hovered the row itself), so this only scrolls for map-driven highlights.
+    if (state !== 0) ref.current?.scrollIntoView({ block: "nearest" });
+  }, [state]);
+  return (
+    <Link
+      ref={ref}
+      href={`/projects/${p.id}`}
+      onMouseEnter={() => setHovered(p.id)}
+      onMouseLeave={() => setHovered(null)}
+      className={`block px-5 py-3 border-b border-[var(--line)] border-l-2 transition-colors ${
+        state === 2
+          ? "bg-[var(--panel-2)] border-l-[var(--accent)]"
+          : state === 1
+            ? "bg-[var(--panel-2)] border-l-transparent"
+            : "border-l-transparent hover:bg-[var(--panel-2)]"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-1">
+        <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: TYPE_COLORS[p.project_type] }} />
+        <span className="text-[10px] uppercase tracking-wider text-[var(--ink-dim)]">
+          {TYPE_LABELS[p.project_type]} · {STATUS_LABELS[p.status]}
+        </span>
+      </div>
+      <div className="text-sm font-medium leading-snug">{p.name}</div>
+      <div className="text-xs text-[var(--ink-dim)] mt-1 flex gap-3">
+        {p.neighborhood && <span>{p.neighborhood}</span>}
+        {p.units_total != null && p.units_total > 0 && <span>{p.units_total} units</span>}
+        {p.funding_amount != null && <span>${(p.funding_amount / 1_000_000).toFixed(1)}M</span>}
+      </div>
+    </Link>
   );
 }
 

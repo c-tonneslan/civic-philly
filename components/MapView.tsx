@@ -8,6 +8,7 @@ import { TYPE_COLORS, TYPE_LABELS, STATUS_LABELS } from "@/lib/types";
 import { formatYMD } from "@/lib/dates";
 import { OVERLAY_OPTIONS, overlayMeta, DEFAULT_VIEW, type OverlayId, type ViewState } from "@/lib/mapViewParams";
 import { writeViewNow, useViewWriter, usePopstateView } from "@/lib/useMapUrlState";
+import { useSelectedId, setSelected, setHovered, getSelected, getHovered, subscribe as subscribeSelection } from "@/lib/mapSelection";
 
 interface Props {
   points: MapProject[];
@@ -25,6 +26,10 @@ const STYLE_URL = process.env.NEXT_PUBLIC_MAP_STYLE_URL || "https://tiles.openfr
 // deficiency) and distinct from the four categorical TYPE_COLORS (blue/orange/
 // purple/green). The old ramp's top color was identical to the transit dot.
 const CHORO = { lo: "#0a2e33", mid: "#0e7490", hi: "#38e0d0" };
+
+// Show the highlight ring only for unclustered points whose id is in `ids`.
+const HIGHLIGHT_FILTER = (ids: number[]): maplibregl.FilterSpecification =>
+  ["all", ["!", ["has", "point_count"]], ["in", ["get", "id"], ["literal", ids]]];
 
 function formatMetric(id: OverlayId, v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return "—";
@@ -44,14 +49,16 @@ export default function MapView({ points, filters, initialView = DEFAULT_VIEW }:
   const [ramp, setRamp] = useState<{ lo: number; hi: number } | null>(null);
   const [showDemolitions, setShowDemolitions] = useState(initialView.showDemolitions);
   const [showViolations, setShowViolations] = useState(initialView.showViolations);
-  const [selectedId, setSelectedId] = useState<number | null>(initialView.selected);
+  // Selection lives in the shared store (so the sidebar list stays in sync);
+  // read it as React state here for the URL-sync effect. Seed the store once
+  // from the shared `sel=` link (in an effect so we never notify during render).
+  const selectedId = useSelectedId();
+  useEffect(() => { setSelected(initialView.selected); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mirror latest state into refs so the once-bound map handlers read current
   // values, and so the debounced moveend writer never uses stale slices.
   const overlayRef = useRef<OverlayId>(initialView.overlay);
   overlayRef.current = overlay;
-  const selRef = useRef<number | null>(initialView.selected);
-  selRef.current = selectedId;
   // An explicit shared camera (`c` in the URL) must win over the Near-Me flyTo
   // on first load; consumed once.
   const hadInitialCamera = useRef<boolean>(!!initialView.center);
@@ -184,6 +191,24 @@ export default function MapView({ points, filters, initialView = DEFAULT_VIEW }:
           "circle-stroke-color": "#0b0c0e",
         },
       });
+      // Highlight ring for the hovered/selected project — an accent stroke on a
+      // transparent fill drawn over the dot. The filter is driven imperatively
+      // from the shared store (see the subscription effect) so hovering the
+      // list or the map never re-renders React.
+      map.addLayer({
+        id: "project-highlight", type: "circle", source: "projects",
+        filter: HIGHLIGHT_FILTER([]),
+        paint: {
+          "circle-radius": 12,
+          "circle-color": "rgba(0,0,0,0)",
+          "circle-stroke-width": 3,
+          "circle-stroke-color": "#ffd166",
+        },
+      });
+      // Reflect any already-set selection (a shared `sel=` link) now that the
+      // layer exists; ongoing changes are handled by the subscription effect.
+      map.setFilter("project-highlight",
+        HIGHLIGHT_FILTER([getHovered(), getSelected()].filter((v): v is number => v != null)));
 
       map.on("click", "clusters", async (e) => {
         const features = map.queryRenderedFeatures(e.point, { layers: ["clusters"] });
@@ -213,11 +238,11 @@ export default function MapView({ points, filters, initialView = DEFAULT_VIEW }:
           </div>`;
         const popup = new maplibregl.Popup({ closeButton: true, offset: 14 })
           .setLngLat(coords).setHTML(html).addTo(map);
-        setSelectedId(props.id);
+        setSelected(props.id);
         popup.on("close", () => {
           // Only clear if this popup is still the selected one (a new click
-          // already updated selectedId before this close fires).
-          if (selRef.current === props.id) setSelectedId(null);
+          // already updated the selection before this close fires).
+          if (getSelected() === props.id) setSelected(null);
         });
       };
 
@@ -228,6 +253,15 @@ export default function MapView({ points, filters, initialView = DEFAULT_VIEW }:
         const coords = (f.geometry as unknown as { coordinates: [number, number] }).coordinates;
         openProjectPopup(coords, props);
       });
+
+      // Hover a pin -> highlight the matching sidebar row (and vice-versa, wired
+      // from the list). Uses the shared store; the highlight ring updates
+      // imperatively below without re-rendering the map.
+      map.on("mousemove", "unclustered", (e) => {
+        const id = e.features?.[0]?.properties?.id;
+        if (typeof id === "number") setHovered(id);
+      });
+      map.on("mouseleave", "unclustered", () => setHovered(null));
 
       // A shared `sel=` link: open the same popup for that project once points
       // are present, and ease to it only if the URL didn't also pin a camera.
@@ -416,6 +450,19 @@ export default function MapView({ points, filters, initialView = DEFAULT_VIEW }:
     writeViewNow({ selected: selectedId });
   }, [selectedId]);
 
+  // Keep the map's highlight ring in sync with the shared store (hover/select)
+  // imperatively, so hovering the list or the map never re-renders the map.
+  useEffect(() => {
+    const applyHighlight = () => {
+      const map = mapRef.current;
+      if (!map || !map.getLayer("project-highlight")) return;
+      const ids = [getHovered(), getSelected()].filter((v): v is number => v != null);
+      map.setFilter("project-highlight", HIGHLIGHT_FILTER(ids));
+    };
+    applyHighlight();
+    return subscribeSelection(applyHighlight);
+  }, []);
+
   // Back/Forward reconcile: MapView seeds view-state once, so a history entry
   // with different view keys would desync the map from the URL. Re-parse on
   // popstate and jump the map/controls to match, suppressing the echo write.
@@ -424,7 +471,7 @@ export default function MapView({ points, filters, initialView = DEFAULT_VIEW }:
     setOverlay(v.overlay);
     setShowDemolitions(v.showDemolitions);
     setShowViolations(v.showViolations);
-    setSelectedId(v.selected);
+    setSelected(v.selected);
     if (map && v.center && v.zoom != null) {
       suppressWrite.current = true;
       map.jumpTo({ center: v.center, zoom: v.zoom });
