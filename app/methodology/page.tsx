@@ -156,7 +156,7 @@ export default function MethodologyPage() {
           <ul className="list-disc pl-5 space-y-1">
             <li><strong>Violation density</strong> — housing-code violations in the last ~1 year, per 1,000 residents.</li>
             <li><strong>Demolition rate</strong> — demolition permits in the last 3 years, per 1,000 residents.</li>
-            <li><strong>Speculative flips</strong> — addresses sold two or more times within ~18 months, per 1,000 residents. Sheriff&apos;s-sale deeds are excluded (distress, not speculation).</li>
+            <li><strong>Speculative flips</strong> — addresses sold on two or more distinct dates within ~18 months, per 1,000 residents. Sheriff&apos;s-sale deeds are excluded (distress, not speculation), and duplicate filings of one sale are collapsed. The transfer feed has no unit id, so distinct units at a single address&#43;ZIP can still register — treat the flip signal as approximate.</li>
             <li><strong>Rent burden</strong> — the ACS share of renter households paying 30%+ of income on rent.</li>
           </ul>
           <p>

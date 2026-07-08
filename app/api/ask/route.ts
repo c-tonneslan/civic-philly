@@ -9,6 +9,21 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({ q: z.string().min(1).max(500) });
 
+// Best-effort per-IP rate limit so an anonymous client can't drain the Groq
+// quota. In-memory (per serverless instance) — a soft guard, not a hard wall,
+// but it raises the bar the way the follows/alerts throttles do for paid work.
+const WINDOW_MS = 60_000;
+const MAX_PER_WINDOW = 12;
+const hits = new Map<string, number[]>();
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const recent = (hits.get(ip) ?? []).filter((t) => now - t < WINDOW_MS);
+  recent.push(now);
+  hits.set(ip, recent);
+  if (hits.size > 5000) hits.clear(); // crude unbounded-growth guard
+  return recent.length > MAX_PER_WINDOW;
+}
+
 // The neighborhood allow-list changes rarely; cache it so every question doesn't
 // re-query the DB.
 let cached: { at: number; list: string[] } | null = null;
@@ -28,6 +43,12 @@ export async function POST(req: Request) {
 
   // Feature degrades to plain full-text search when unconfigured — never 500.
   if (!getGroqKey()) return NextResponse.json({ error: "not_configured" }, { status: 501 });
+
+  const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || "unknown";
+  if (rateLimited(ip)) {
+    // Tell the client to fall back to plain search rather than error out.
+    return NextResponse.json({ ok: false, fallback: true, query: buildQuery({ q }) }, { status: 429 });
+  }
 
   // Any failure (bad JSON, empty parse, timeout, rate-limit) falls back to
   // treating the whole question as a full-text query.

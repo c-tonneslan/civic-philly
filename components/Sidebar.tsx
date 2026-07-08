@@ -12,6 +12,7 @@ import NearMe from "./NearMe";
 import { copyViewKeysInto } from "@/lib/useMapUrlState";
 import { useRowState, setHovered } from "@/lib/mapSelection";
 import { buildQuery } from "@/lib/queryString";
+import { VIEW_KEYS } from "@/lib/mapViewParams";
 
 interface Props {
   projects: Project[];
@@ -295,11 +296,20 @@ function SearchBox({
   // Pull draft back in line whenever value actually changes from outside.
   useEffect(() => { setDraft(value); }, [value]);
 
+  // Snapshot the FILTER portion of the URL (ignoring view keys like camera, which
+  // change on map pan) so we can tell if the user changed filters mid-request.
+  function filterSnapshot(): string {
+    const sp = new URLSearchParams(window.location.search);
+    for (const k of VIEW_KEYS) sp.delete(k);
+    return sp.toString();
+  }
+
   async function ask(text: string) {
     if (inFlight.current) return; // guard against a double-fire clobbering the URL
     inFlight.current = true;
     setPending(true);
     setNote(null);
+    const before = filterSnapshot();
     try {
       const resp = await fetch("/api/ask", {
         method: "POST",
@@ -308,6 +318,9 @@ function SearchBox({
       });
       if (!resp.ok) { onChange(text); return; } // e.g. 501 not configured -> plain search
       const j = await resp.json();
+      // If the user changed filters while we were thinking, don't clobber their
+      // new selection with the (now stale) AI result.
+      if (filterSnapshot() !== before) return;
       if (j.fallback) setNote("Searched the text instead.");
       onAiQuery?.(j.query ?? "");
     } catch {

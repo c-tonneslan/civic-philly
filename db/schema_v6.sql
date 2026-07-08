@@ -29,16 +29,27 @@ demo AS (
    WHERE d.event_date >= NOW() - INTERVAL '3 years'
    GROUP BY t.geoid
 ),
--- Addresses sold 2+ times inside the transfer window = speculative churn.
--- One representative geom per address, so the tract join can't fan out.
+-- Addresses sold on 2+ DISTINCT dates inside the window = speculative churn.
+-- Two guards against over-counting (flagged in review): key on (address, zip)
+-- so identical street names in different ZIPs don't merge, and collapse to one
+-- row per sale DATE first so a single sale recorded as both a DEED and a
+-- MISCELLANEOUS DEED (or duplicate filings) isn't miscounted as a resale.
+-- Note: without a parcel/unit id, distinct units at one address+zip sold on
+-- different dates can still register — see /methodology.
 flip_addr AS (
-  SELECT address,
+  SELECT address, zip,
          (array_agg(geom ORDER BY transfer_date))[1] AS geom
-    FROM civic.transfers
-   WHERE address IS NOT NULL
-     AND document_type IN ('DEED', 'MISCELLANEOUS DEED')  -- exclude SHERIFF'S DEED (distress)
-     AND transfer_date >= NOW() - INTERVAL '18 months'
-   GROUP BY address
+    FROM (
+      -- One row per (address, zip, sale date): collapses duplicate/corrective
+      -- filings of the same sale so they don't look like a resale.
+      SELECT address, zip, transfer_date, (array_agg(geom))[1] AS geom
+        FROM civic.transfers
+       WHERE address IS NOT NULL
+         AND document_type IN ('DEED', 'MISCELLANEOUS DEED')  -- exclude SHERIFF'S DEED (distress)
+         AND transfer_date >= NOW() - INTERVAL '18 months'
+       GROUP BY address, zip, transfer_date
+    ) sales
+   GROUP BY address, zip
   HAVING COUNT(*) >= 2
 ),
 flip AS (

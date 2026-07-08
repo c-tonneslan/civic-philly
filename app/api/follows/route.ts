@@ -33,15 +33,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  const follow = await createFollow(parsed.data);
-
-  // Build confirmation links from a trusted origin only (see app/api/alerts).
+  // Resolve the trusted origin BEFORE writing a row — otherwise a misconfigured
+  // prod would create an unverifiable follow it can never email a link for.
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
     || (process.env.NODE_ENV !== "production" ? "http://localhost:3000" : null);
   if (!baseUrl) {
     console.error("follows: NEXT_PUBLIC_BASE_URL is not set; refusing untrusted origin");
     return NextResponse.json({ error: "server misconfigured" }, { status: 500 });
   }
+
+  const follow = await createFollow(parsed.data);
+
   const verifyUrl = `${baseUrl}/api/follows/verify?token=${follow.verify_token}`;
   const unsubUrl = `${baseUrl}/api/alerts/unsubscribe?token=${follow.unsubscribe_token}`;
   const label = describeFollowTarget(follow.target_type, follow.target_value);

@@ -347,6 +347,11 @@ export default function MapView({ points, filters, initialView = DEFAULT_VIEW }:
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
+    // Guard against out-of-order arrival: the displacement route and the ACS
+    // tracts route have different latencies, so a superseded fetch must not paint
+    // over the current overlay. Cancelled on the next overlay change.
+    const ctrl = new AbortController();
+    let stale = false;
 
     const apply = async () => {
       const src = map.getSource("tracts") as GeoJSONSource | undefined;
@@ -361,9 +366,11 @@ export default function MapView({ points, filters, initialView = DEFAULT_VIEW }:
       const url = overlay === "displacement_pressure"
         ? "/api/overlays/displacement"
         : `/api/overlays/tracts?metric=${overlay}`;
-      const resp = await fetch(url);
-      if (!resp.ok) return;
+      let resp: Response;
+      try { resp = await fetch(url, { signal: ctrl.signal }); } catch { return; }
+      if (stale || !resp.ok) return;
       const data = await resp.json();
+      if (stale) return;
       // Coerce values to numbers defensively. NUMERIC columns sometimes
       // come back as strings even though we cast in SQL.
       for (const f of data.features) {
@@ -386,6 +393,7 @@ export default function MapView({ points, filters, initialView = DEFAULT_VIEW }:
     };
     if (map.isStyleLoaded()) apply();
     else map.once("load", apply);
+    return () => { stale = true; ctrl.abort(); };
   }, [overlay]);
 
   // Demolitions layer toggle.

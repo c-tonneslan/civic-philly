@@ -8,6 +8,16 @@ export function getGroqKey(): string | null {
   return process.env.GROQ_API_KEY || null;
 }
 
+// A delay that rejects as soon as the signal aborts, so a retry backoff can't
+// outlive the caller's timeout.
+function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error("aborted"));
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener("abort", () => { clearTimeout(t); reject(new Error("aborted")); }, { once: true });
+  });
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -22,6 +32,7 @@ export async function groqChat(messages: ChatMessage[], opts: { signal?: AbortSi
 
   const maxAttempts = 3;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (opts.signal?.aborted) throw new Error("aborted");
     const resp = await fetch(GROQ_URL, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
@@ -39,11 +50,15 @@ export async function groqChat(messages: ChatMessage[], opts: { signal?: AbortSi
       return j.choices?.[0]?.message?.content ?? "";
     }
 
-    // Retry transient rate-limit / unavailability, honoring Retry-After.
+    // Retry transient rate-limit / unavailability. Cap the wait (a rate-limited
+    // Groq can send Retry-After: 3600, which would otherwise block the request
+    // far past the caller's timeout budget) and make the sleep abortable so the
+    // 5s AbortController in the route actually cancels it.
     if ((resp.status === 429 || resp.status === 503) && attempt < maxAttempts) {
       const ra = Number(resp.headers.get("retry-after"));
-      const wait = Number.isFinite(ra) && ra > 0 ? ra * 1000 : 2 ** attempt * 250 + Math.random() * 200;
-      await new Promise((r) => setTimeout(r, wait));
+      const raw = Number.isFinite(ra) && ra > 0 ? ra * 1000 : 2 ** attempt * 250 + Math.random() * 200;
+      const wait = Math.min(raw, 2000);
+      await abortableDelay(wait, opts.signal);
       continue;
     }
     throw new Error(`groq ${resp.status}`);
